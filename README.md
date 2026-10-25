@@ -2,6 +2,10 @@
   <img src="assets/zeroflame-logo.png" alt="Zeroflame logo" width="160">
 </p>
 
+<p align="center">
+  <a href="https://github.com/poncheck/zeroflame">github.com/poncheck/zeroflame</a>
+</p>
+
 # Zeroflame ☕🔥
 
 Self-hosted roast-log & green-bean-inventory tracker built for [Boost](https://boost.stronghold.coffee)-connected
@@ -36,7 +40,7 @@ Bluetooth, directly in the browser (no extra hardware needed).
 ## Quick start (Docker)
 
 ```bash
-git clone <this-repo-url> zeroflame
+git clone https://github.com/poncheck/zeroflame.git
 cd zeroflame
 cp .env.example .env
 # edit .env: set BOOST_EMAIL/BOOST_PASSWORD (if you want auto-sync),
