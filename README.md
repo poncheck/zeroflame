@@ -16,6 +16,10 @@ UI, tracks green bean inventory and usage per roast, and supports reading
 live Agtron color readings straight from a **DiFluid Omni** colorimeter over
 Bluetooth, directly in the browser (no extra hardware needed).
 
+<p align="center">
+  <img src="assets/screenshot-roasts.png" alt="Zeroflame roasts list screenshot" width="800">
+</p>
+
 ## Features
 
 - **Roast database** — full scrape of Boost roast history: metadata, phase
