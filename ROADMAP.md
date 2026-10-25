@@ -104,6 +104,53 @@ Once both are done: on iPhone, Safari → Share → "Add to Home Screen" gives
 a proper app icon + launches full-screen without browser chrome, which is
 the practical goal here (no App Store submission needed).
 
+## GoPos stock (stock.gopos.io) integration
+
+Goal: stop tracking green-bean inventory in two disconnected places.
+Right now Zeroflame has its own `green_bean_inventory.db` (stock levels,
+tags, batches, moisture readings, auto-synced usage from roasts), while
+cukru.cafe's actual stock/purchasing system of record is
+**stock.gopos.io** (GoStock — org 5637; already integrated elsewhere for
+cash reports and calorie lookups via `/ajax/5637/products`,
+`/ajax/5637/purchase_orders`, `/ajax/5637/bundles`).
+
+### 1. Inventory sync (GoStock → Zeroflame, and back)
+
+- Pull green coffee stock levels/lots from GoStock
+  (`/ajax/5637/products` for raw green beans as line items) so
+  Zeroflame's bean inventory reflects the same source of truth instead of
+  being tracked manually a second time.
+- Match by product name/SKU or a stored GoStock product ID per bean
+  record (same pattern already used for calorie lookups when a product
+  isn't found by name — fall back to an explicit ID mapping).
+- Auth: reuse the existing Playwright-based OAuth token flow (headless
+  Firefox → intercept `oauth/token`) already built for GoStock API calls
+  elsewhere in the cukru.cafe stack — no new auth mechanism needed.
+- Decide direction of truth: likely GoStock stays authoritative for
+  on-hand stock quantity (purchasing happens there), Zeroflame stays
+  authoritative for per-roast green-bean *usage* (it already auto-tracks
+  consumption from each roast) — sync is usage flowing one way
+  (Zeroflame → GoStock stock deduction) rather than a two-way merge.
+
+### 2. End-of-day production push (Zeroflame → GoStock bundles)
+
+- At end of day, generate a GoStock "production" entry (the `bundles`
+  endpoint — same mechanism already used for `sling-gostock-produkcja`
+  packaging sync) summarizing that day's roasts: green bean consumed →
+  roasted coffee produced, by lot/profile.
+- This turns daily roasting into a proper GoStock production record
+  (green bean stock decremented, roasted-coffee stock incremented) instead
+  of a manual entry Anna or Marcin has to do separately.
+- Needs a batch/trigger: either a manual "close the day" button on the
+  Zeroflame dashboard, or a scheduled end-of-day cron (similar to the
+  existing minute-by-minute Boost sync, but once/day after roasting
+  hours).
+- Edge cases to handle: partial/failed roasts (don't count toward
+  production), blending multiple green lots into one roasted batch,
+  and weight shrinkage during roasting (green weight in vs. roasted
+  weight out — Zeroflame already captures post-roast weight per roast,
+  so the shrink % is available for the production record).
+
 ## Other system improvements (backlog, not yet scheduled)
 
 - **Production WSGI server** — replace Flask's dev server (currently
