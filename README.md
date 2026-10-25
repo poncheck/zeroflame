@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/zeroflame-logo.png" alt="Zeroflame logo" width="160">
+</p>
+
 # Zeroflame ☕🔥
 
 Self-hosted roast-log & green-bean-inventory tracker built for [Boost](https://boost.stronghold.coffee)-connected
