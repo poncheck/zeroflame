@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
-<title>Logowanie — cukru.coffee</title>
+<title>Logowanie — Zeroflame</title>
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
 <style>
   :root { --brown: #6f4e37; --cream: #fbf5ef; --accent: #c9792b; }
@@ -39,7 +39,10 @@
 </head>
 <body>
   <div class="login-card">
-    <h1>☕ cukru.coffee — Boost Roasts DB</h1>
+    <h1 style="display:flex; align-items:center; justify-content:center; gap:10px;">
+      <img src="{{ url_for('static', filename='favicon.png') }}" alt="Zeroflame" style="height:28px; width:28px;">
+      Zeroflame
+    </h1>
     <form method="post">
       <label for="username">Login</label>
       <input type="text" id="username" name="username" autocomplete="username" required autofocus>

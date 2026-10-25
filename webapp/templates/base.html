@@ -2,7 +2,7 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
-<title>{% block title %}Boost Roasts{% endblock %}</title>
+<title>{% block title %}Zeroflame{% endblock %}</title>
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
 <style>
   :root { --brown: #6f4e37; --cream: #fbf5ef; --accent: #c9792b; }
@@ -48,7 +48,10 @@
 </head>
 <body>
 <header>
-  <a href="{{ url_for('index') }}">☕ cukru.coffee — Boost Roasts DB</a>
+  <a href="{{ url_for('index') }}" style="display:flex; align-items:center; gap:8px;">
+    <img src="{{ url_for('static', filename='favicon.png') }}" alt="Zeroflame" style="height:24px; width:24px;">
+    Zeroflame
+  </a>
   <nav>
     <a href="{{ url_for('index') }}">Dashboard</a>
     <a href="{{ url_for('roasts_list') }}">Wypały</a>
