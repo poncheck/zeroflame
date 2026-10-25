@@ -151,6 +151,36 @@ cash reports and calorie lookups via `/ajax/5637/products`,
   weight out — Zeroflame already captures post-roast weight per roast,
   so the shrink % is available for the production record).
 
+## Multilanguage support (PL / EN / KO)
+
+Currently everything is hardcoded in Polish (UI labels, button text,
+flash messages, date/number formatting). Needs to support English and
+Korean as well, with Polish as default.
+
+### Approach
+
+- Introduce Flask-Babel (or a lighter custom dict-based i18n helper if
+  Babel feels heavy for this app's size) — wrap every user-facing string
+  in templates/Python with a translation function (`{{ _('Wypały') }}` /
+  `_('Wypały')`).
+- Extract strings into `.po`/`.json` translation files per locale
+  (`pl`, `en`, `ko`) — start from the Polish strings already in the
+  templates as the source set.
+- Language switcher in the header (next to the Zeroflame logo/name) —
+  persisted per-user (stored on the `users` row or in the session) so
+  each person sees their own preferred language, not a site-wide toggle.
+- Korean needs font coverage check — current UI font (Josefin Sans, used
+  elsewhere in the cukru.cafe stack for PDFs) doesn't cover Hangul;
+  webapp will need a separate web font with Korean glyphs loaded
+  conditionally for `ko` locale.
+- Numbers/dates: roast time is already formatted as M:SS (locale-neutral),
+  but dates and decimal separators (comma vs. period) need locale-aware
+  formatting once a non-Polish locale is selected.
+- Scope note: this only covers the Zeroflame UI itself — Boost
+  (stronghold.coffee) roast data pulled via the scraper stays in whatever
+  language it was entered in (notes field, bean names typed by whoever
+  logged the roast) and won't be auto-translated.
+
 ## Other system improvements (backlog, not yet scheduled)
 
 - **Production WSGI server** — replace Flask's dev server (currently
