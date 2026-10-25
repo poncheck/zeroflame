@@ -37,6 +37,31 @@ Bluetooth, directly in the browser (no extra hardware needed).
   minute and keeps the inventory in sync; safe to re-run, stays quiet when
   there's nothing new.
 
+## What's next
+
+Short, ordered task list distilled from [ROADMAP.md](ROADMAP.md) — this is
+roughly the order we're planning to tackle things in (see the roadmap for
+full details on each item):
+
+- [ ] **Production WSGI server** — swap Flask's dev server for gunicorn
+      behind the reverse proxy (currently running in production with the
+      dev-server warning).
+- [ ] **Automated backups** on the production host (cron + rotation).
+- [ ] **Responsive design** — make every page usable on phone/tablet
+      (prerequisite for the item below).
+- [ ] **Add to iPhone home screen** (PWA basics — manifest, apple-touch-icon,
+      standalone mode).
+- [ ] **Cupping module** — SCA scoring linked to `roast_id`/`bean_id`,
+      multi-taster sessions, blind coding.
+- [ ] **GoStock (stock.gopos.io) integration** — sync green-bean inventory
+      + push daily production into GoStock bundles.
+- [ ] **Multilanguage support** — PL (default) / EN / KO, per-user language
+      switch.
+- [ ] Role-based accounts (admin vs. read-only viewer).
+- [ ] CSV/JSON export from the dashboard.
+- [ ] Low-stock alerts.
+- [ ] Cost tracking (COGS) per green-bean lot.
+
 ## Quick start (Docker)
 
 ```bash
