@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}Boost Roasts{% endblock %}</title>
+<style>
+  :root { --brown: #6f4e37; --cream: #fbf5ef; --accent: #c9792b; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: var(--cream); color: #2b2015; }
+  header { background: var(--brown); color: #fff; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; }
+  header a { color: #fff; text-decoration: none; font-weight: 600; }
+  header nav a { margin-left: 16px; opacity: 0.85; font-weight: 400; }
+  header nav a:hover { opacity: 1; text-decoration: underline; }
+  main { padding: 20px 24px; max-width: 1200px; margin: 0 auto; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; font-size: 14px; }
+  th { background: #efe4d9; position: sticky; top: 0; }
+  tr:hover { background: #fdf8f1; }
+  a.row-link { color: var(--brown); text-decoration: none; font-weight: 600; }
+  a.row-link:hover { text-decoration: underline; }
+  .card { background: #fff; border-radius: 10px; padding: 16px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 16px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat { background: #fff; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .stat .num { font-size: 26px; font-weight: 700; color: var(--accent); }
+  .stat .label { font-size: 12px; color: #776a5a; text-transform: uppercase; letter-spacing: 0.04em; }
+  .pill { display:inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; background: #efe4d9; color: var(--brown); }
+  .pill.ok { background: #dff3df; color: #2f6b2f; }
+  .pill.missing { background: #f6e4e4; color: #8a3b3b; }
+  form.filters { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  form.filters input, form.filters select { padding: 6px 10px; border: 1px solid #d8cbb9; border-radius: 6px; font-size: 14px; }
+  button, input[type=submit] { background: var(--accent); color: #fff; border: none; padding: 7px 16px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  button:hover, input[type=submit]:hover { opacity: 0.9; }
+  .pagination { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+  .pagination a, .pagination span { padding: 5px 10px; border-radius: 5px; background: #fff; text-decoration: none; color: var(--brown); font-size: 13px; }
+  .pagination .current { background: var(--brown); color: #fff; }
+  dl.meta { display: grid; grid-template-columns: 200px 1fr; row-gap: 6px; column-gap: 10px; font-size: 14px; }
+  dl.meta dt { font-weight: 600; color: #776a5a; }
+  .back-link { display:inline-block; margin-bottom: 14px; color: var(--brown); text-decoration:none; font-size: 14px; }
+  canvas { max-width: 100%; }
+  .manual-form label { display:block; font-size: 13px; color: #776a5a; margin-top: 8px; }
+  .manual-form input { width: 100%; padding: 6px 10px; border: 1px solid #d8cbb9; border-radius: 6px; margin-top: 2px; }
+  .loss { font-weight: 700; color: var(--accent); }
+  table.sortable th { cursor: pointer; user-select: none; white-space: nowrap; }
+  table.sortable th:hover { background: #e6d8c6; }
+  table.sortable th .arrow { font-size: 10px; margin-left: 4px; opacity: 0.6; }
+</style>
+</head>
+<body>
+<header>
+  <a href="{{ url_for('index') }}">☕ cukru.coffee — Boost Roasts DB</a>
+  <nav>
+    <a href="{{ url_for('index') }}">Dashboard</a>
+    <a href="{{ url_for('roasts_list') }}">Wypały</a>
+    <a href="{{ url_for('inventory_list') }}">Magazyn</a>
+    {% if session.get('username') %}
+    <span style="margin-left:16px; opacity:0.85;">👤 {{ session.get('display_name') }}</span>
+    <form method="post" action="{{ url_for('logout') }}" style="display:inline; margin-left:10px;">
+      <button type="submit" style="background:transparent; border:1px solid rgba(255,255,255,0.5); padding:4px 10px; font-size:12px;">Wyloguj</button>
+    </form>
+    {% endif %}
+  </nav>
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+<script>
+// Generic click-to-sort for any <table class="sortable">.
+// Sorts the rows currently in the DOM (i.e. the current page / loaded rows).
+(function () {
+  function cellValue(td) {
+    return (td.textContent || "").trim();
+  }
+  function toSeconds(str) {
+    // M:SS or MM:SS duration -> total seconds (for comparison purposes)
+    const m = str.match(/^(-?\d+):(\d{2})$/);
+    if (!m) return null;
+    const sign = m[1].startsWith("-") ? -1 : 1;
+    const minutes = Math.abs(parseInt(m[1], 10));
+    const seconds = parseInt(m[2], 10);
+    return sign * (minutes * 60 + seconds);
+  }
+  function compare(a, b, numeric) {
+    const aDur = toSeconds(a);
+    const bDur = toSeconds(b);
+    if (aDur !== null || bDur !== null) {
+      if (aDur === null) return 1;
+      if (bDur === null) return -1;
+      return aDur - bDur;
+    }
+    if (numeric) {
+      const an = parseFloat(a.replace(",", ".").replace(/[^0-9.\-]/g, ""));
+      const bn = parseFloat(b.replace(",", ".").replace(/[^0-9.\-]/g, ""));
+      const aIsNum = !isNaN(an) && a !== "" && a !== "—";
+      const bIsNum = !isNaN(bn) && b !== "" && b !== "—";
+      if (!aIsNum && !bIsNum) return 0;
+      if (!aIsNum) return 1;   // missing values sort last
+      if (!bIsNum) return -1;
+      return an - bn;
+    }
+    if (a === "—" && b === "—") return 0;
+    if (a === "—") return 1;
+    if (b === "—") return -1;
+    return a.localeCompare(b, "pl");
+  }
+  function looksNumeric(sample) {
+    if (!sample || sample === "—") return false;
+    return /^-?[\d.,]+\s*(kg|g|%|s|°c)?$/i.test(sample.trim());
+  }
+  function initTable(table) {
+    const thead = table.tHead;
+    if (!thead) return;
+    const headerRow = thead.rows[thead.rows.length - 1];
+    Array.from(headerRow.cells).forEach(function (th, idx) {
+      th.addEventListener("click", function () {
+        sortByColumn(table, idx, th);
+      });
+    });
+  }
+  function sortByColumn(table, idx, th) {
+    const tbody = table.tBodies[0];
+    const rows = Array.from(tbody.rows);
+    const current = th.getAttribute("data-dir") || "none";
+    const dir = current === "asc" ? "desc" : "asc";
+
+    // reset arrows on all headers in this table
+    Array.from(th.parentElement.cells).forEach(function (c) {
+      c.removeAttribute("data-dir");
+      const old = c.querySelector(".arrow");
+      if (old) old.remove();
+    });
+    th.setAttribute("data-dir", dir);
+    const arrow = document.createElement("span");
+    arrow.className = "arrow";
+    arrow.textContent = dir === "asc" ? "▲" : "▼";
+    th.appendChild(arrow);
+
+    const sampleVals = rows.slice(0, 15).map(function (r) {
+      return r.cells[idx] ? cellValue(r.cells[idx]) : "";
+    });
+    const numericCol = sampleVals.filter(looksNumeric).length >= Math.max(1, sampleVals.filter(function(v){return v && v !== "—";}).length * 0.6);
+
+    rows.sort(function (r1, r2) {
+      const v1 = r1.cells[idx] ? cellValue(r1.cells[idx]) : "";
+      const v2 = r2.cells[idx] ? cellValue(r2.cells[idx]) : "";
+      const c = compare(v1, v2, numericCol);
+      return dir === "asc" ? c : -c;
+    });
+    rows.forEach(function (r) { tbody.appendChild(r); });
+  }
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll("table.sortable").forEach(initTable);
+  });
+})();
+</script>
+</body>
+</html>

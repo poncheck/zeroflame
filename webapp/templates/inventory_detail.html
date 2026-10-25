@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}{{ bean['full_name'] or bean['code'] }} — Magazyn{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('inventory_list') }}">&larr; wróć do magazynu</a>
+
+<div class="card">
+  <h2 style="margin-top:0">{{ bean['full_name'] or bean['code'] }}</h2>
+  <dl class="meta">
+    <dt>Kod</dt><dd>{{ bean['code'] }}</dd>
+    <dt>Kraj</dt><dd>{{ bean['country'] or '—' }}</dd>
+    <dt>Region</dt><dd>{{ bean['region'] or '—' }}</dd>
+    <dt>Farma</dt><dd>{{ bean['farm'] or '—' }}</dd>
+    <dt>Odmiana</dt><dd>{{ bean['variety'] or '—' }}</dd>
+    <dt>Obróbka</dt><dd>{{ bean['processing'] or '—' }}</dd>
+    <dt>Tagi</dt><dd>
+      {% for t in tags %}
+      <span class="pill" style="margin-right:4px;">#{{ t }}
+        <form method="post" action="{{ url_for('inventory_delete_tag', code=bean['code'], tag=t) }}" style="display:inline;">
+          <button type="submit" style="font-size:10px; padding:1px 5px; margin-left:4px; background:#b5504a;" onclick="return confirm('Usunąć tag #{{ t }}?');">×</button>
+        </form>
+      </span>
+      {% else %}—{% endfor %}
+      <form method="post" action="{{ url_for('inventory_add_tag', code=bean['code']) }}" style="display:inline-block; margin-left:8px;">
+        <input type="text" name="tag" placeholder="np. TYPICA" style="width:120px; font-size:13px; padding:3px 6px;">
+        <button type="submit" style="font-size:12px; padding:3px 8px;">+ dodaj tag</button>
+      </form>
+    </dd>
+    <dt>Status</dt><dd>
+      {% if bean['status']=='active' %}<span class="pill ok">aktywne w Boost</span>
+      {% else %}<span class="pill">historyczne</span>{% endif %}
+      <form method="post" action="{{ url_for('inventory_set_status', code=bean['code']) }}" style="display:inline; margin-left:10px;">
+        <input type="hidden" name="status" value="{{ 'historical' if bean['status']=='active' else 'active' }}">
+        <button type="submit">
+          {% if bean['status']=='active' %}Oznacz jako historyczne{% else %}Oznacz jako aktywne{% endif %}
+        </button>
+      </form>
+    </dd>
+    <dt>Kod Boost</dt><dd>{{ bean['boost_bean_cd'] or '—' }}</dd>
+    <dt>Aktualny stan (Boost)</dt><dd>{{ bean['current_stock_kg'] if bean['current_stock_kg'] is not none else '—' }} kg</dd>
+    <dt>Liczba wypałów</dt><dd>{{ bean['roast_count'] }}</dd>
+    <dt>Liczba batchy (unikalnych profili)</dt><dd>{{ bean['batch_count'] if bean['batch_count'] is not none else '—' }}</dd>
+    <dt>Pierwsze użycie</dt><dd>{{ (bean['first_used'] or '—')[:10] }}</dd>
+    <dt>Ostatnie użycie</dt><dd>{{ (bean['last_used'] or '—')[:10] }}</dd>
+    <dt>Uwagi</dt><dd>{{ bean['source_note'] or '—' }}</dd>
+  </dl>
+
+  <details style="margin-top:14px;">
+    <summary style="cursor:pointer; color:var(--brown); font-weight:600;">Edytuj opis ziarna</summary>
+    <form method="post" action="{{ url_for('inventory_edit', code=bean['code']) }}" class="manual-form" style="margin-top:10px;">
+      <label>Pełna nazwa
+        <input type="text" name="full_name" value="{{ bean['full_name'] or '' }}">
+      </label>
+      <label>Kraj
+        <input type="text" name="country" value="{{ bean['country'] or '' }}">
+      </label>
+      <label>Region
+        <input type="text" name="region" value="{{ bean['region'] or '' }}">
+      </label>
+      <label>Farma
+        <input type="text" name="farm" value="{{ bean['farm'] or '' }}">
+      </label>
+      <label>Odmiana
+        <input type="text" name="variety" value="{{ bean['variety'] or '' }}">
+      </label>
+      <label>Obróbka
+        <input type="text" name="processing" value="{{ bean['processing'] or '' }}">
+      </label>
+      <label>Uwagi
+        <input type="text" name="source_note" value="{{ bean['source_note'] or '' }}">
+      </label>
+      <div style="margin-top:12px;"><button type="submit">Zapisz opis</button></div>
+    </form>
+  </details>
+</div>
+
+<div class="card manual-form">
+  <h3 style="margin-top:0;">Statystyki ziarna (wilgotność / gęstość / temperatura)</h3>
+  <form method="post" action="{{ url_for('inventory_add_moisture', code=bean['code']) }}">
+    <label>Wilgotność (%)
+      <input type="number" step="0.1" min="0" max="100" name="moisture_pct">
+    </label>
+    <label>Gęstość (g/l)
+      <input type="number" step="0.1" min="0" name="density">
+    </label>
+    <label>Temperatura ziarna (°C)
+      <input type="number" step="0.1" name="bean_temp_c">
+    </label>
+    <label>Data pomiaru
+      <input type="date" name="measured_date" required>
+    </label>
+    <label>Notatki
+      <input type="text" name="notes">
+    </label>
+    <div style="margin-top:12px;"><button type="submit">Dodaj odczyt</button></div>
+  </form>
+
+  {% if moisture_readings %}
+  <table class="sortable" style="margin-top:16px;">
+    <thead>
+      <tr><th>Data</th><th>Wilgotność (%)</th><th>Gęstość (g/l)</th><th>Temp. ziarna (°C)</th><th>Notatki</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for mr in moisture_readings %}
+      <tr>
+        <td>{{ (mr['measured_at'] or '')[:10] }}</td>
+        <td>{{ mr['moisture_pct'] if mr['moisture_pct'] is not none else '—' }}{% if mr['moisture_pct'] is not none %}%{% endif %}</td>
+        <td>{{ mr['density'] if mr['density'] is not none else '—' }}</td>
+        <td>{{ mr['bean_temp_c'] if mr['bean_temp_c'] is not none else '—' }}</td>
+        <td>{{ mr['notes'] or '—' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('inventory_delete_moisture', code=bean['code'], reading_id=mr['id']) }}" style="display:inline;">
+            <button type="submit" style="font-size:12px; padding:4px 8px; background:#b5504a;" onclick="return confirm('Usunąć ten odczyt?');">Usuń</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="margin-top:14px; color:#776a5a;">Brak jeszcze zapisanych odczytów.</p>
+  {% endif %}
+</div>
+
+<h3>Historia ruchów magazynowych (ostatnie 500)</h3>
+<table class="sortable">
+<thead>
+<tr><th>Data</th><th>Typ</th><th>Ilość (kg)</th><th>Źródło</th><th>Notatki</th><th>Wypał</th></tr>
+</thead>
+<tbody>
+{% for m in movements %}
+<tr>
+  <td>{{ (m['movement_date'] or '')[:19] }}</td>
+  <td>{% if m['movement_type']=='delivery' %}<span class="pill ok">dostawa</span>
+      {% elif m['movement_type']=='usage' %}<span class="pill">zużycie</span>
+      {% else %}<span class="pill">korekta</span>{% endif %}</td>
+  <td>{{ '%.3f'|format(m['amount_kg']) if m['amount_kg'] is not none else '—' }}</td>
+  <td>{{ m['source'] }}</td>
+  <td>{{ m['notes'] or '—' }}</td>
+  <td>
+    {% if m['reference_cd'] %}
+      <a class="row-link" href="{{ url_for('roast_detail', prfl_m_cd=m['reference_cd']) }}">zobacz wypał</a>
+    {% else %}—{% endif %}
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endblock %}

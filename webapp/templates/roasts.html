@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block title %}Wypały — Boost Roasts{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <input type="text" name="q" placeholder="Szukaj w nazwie / notatkach..." value="{{ q }}">
+  <select name="bean">
+    <option value="">— wszystkie ziarna —</option>
+    {% for b in bean_options %}
+    <option value="{{ b }}" {% if b == bean %}selected{% endif %}>{{ b }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit">Filtruj</button>
+</form>
+
+<p>Znaleziono: <strong>{{ total }}</strong> wypałów (strona {{ page }}/{{ total_pages }})</p>
+
+<table>
+  <thead>
+    <tr>
+      {% macro sort_th(key, label) %}
+        {% set new_dir = 'asc' if (sort == key and direction == 'desc') else 'desc' %}
+        <th><a href="?q={{ q }}&bean={{ bean }}&sort={{ key }}&dir={{ new_dir }}" style="color:inherit; text-decoration:none;">
+          {{ label }}{% if sort == key %}{% if direction == 'asc' %} ▲{% else %} ▼{% endif %}{% endif %}
+        </a></th>
+      {% endmacro %}
+      {{ sort_th('name', 'Nazwa') }}
+      {{ sort_th('date', 'Data') }}
+      {{ sort_th('bean', 'Ziarno') }}
+      {{ sort_th('amount', 'Wsad') }}
+      {{ sort_th('mode', 'Tryb') }}
+      {{ sort_th('level', 'Poziom') }}
+      {{ sort_th('dtr', 'Dev %') }}
+      {{ sort_th('whole_c', 'Kolor cały') }}
+      {{ sort_th('ground_c', 'Kolor zmiel.') }}
+      {{ sort_th('weight', 'Waga po') }}
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td><a class="row-link" href="{{ url_for('roast_detail', prfl_m_cd=r['prfl_m_cd']) }}">{{ r['prfl_name'] }}</a></td>
+      <td>{{ r['rst_dt_iso'][:16] if r['rst_dt_iso'] else '' }}</td>
+      <td>
+        {% if r['bean_name'] and r['bean_name'] in inv_codes %}
+          <a class="row-link" href="{{ url_for('inventory_detail', code=r['bean_name']) }}">{{ r['bean_name'] }}</a>
+        {% else %}
+          {{ r['bean_name'] or '—' }}
+        {% endif %}
+      </td>
+      <td>{{ r['grn_bean_amt'] or '—' }}</td>
+      <td>{{ rst_mod_labels.get(r['rst_mod'], r['rst_mod']) }}</td>
+      <td>{{ rst_lvl_labels.get(r['rst_lvl'], r['rst_lvl']) }}</td>
+      <td>{{ r['dtr'] or '—' }}</td>
+      <td class="qedit" data-prfl="{{ r['prfl_m_cd'] }}" data-field="whole_c">{% if r['whole_c'] %}<span class="pill ok">{{ r['whole_c'] }}</span>{% else %}<span class="pill missing">—</span>{% endif %}</td>
+      <td class="qedit" data-prfl="{{ r['prfl_m_cd'] }}" data-field="ground_c">{% if r['ground_c'] %}<span class="pill ok">{{ r['ground_c'] }}</span>{% else %}<span class="pill missing">—</span>{% endif %}</td>
+      <td class="qedit" data-prfl="{{ r['prfl_m_cd'] }}" data-field="weight_kg">{% if r['weight_kg'] %}<span class="pill ok">{{ r['weight_kg'] }}kg</span>{% else %}<span class="pill missing">—</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="pagination">
+  {% if page > 1 %}<a href="?q={{ q }}&bean={{ bean }}&sort={{ sort }}&dir={{ direction }}&page={{ page - 1 }}">« poprzednia</a>{% endif %}
+  <span class="current">{{ page }} / {{ total_pages }}</span>
+  {% if page < total_pages %}<a href="?q={{ q }}&bean={{ bean }}&sort={{ sort }}&dir={{ direction }}&page={{ page + 1 }}">następna »</a>{% endif %}
+</div>
+
+<div id="qeditOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:50;"></div>
+<div id="qeditModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; padding:20px 24px; box-shadow:0 4px 20px rgba(0,0,0,0.25); z-index:51; width:280px;">
+  <h3 style="margin:0 0 4px 0; color:var(--brown); font-size:16px;">Szybka edycja</h3>
+  <div id="qeditRoastName" style="font-size:12px; color:#776a5a; margin-bottom:12px;"></div>
+  <label style="display:block; font-size:13px; color:#776a5a; margin-top:8px;">Kolor cały (Agtron)</label>
+  <input type="number" step="0.1" id="qeditWhole" style="width:100%; padding:6px 10px; border:1px solid #d8cbb9; border-radius:6px; margin-top:2px;">
+  <label style="display:block; font-size:13px; color:#776a5a; margin-top:8px;">Kolor zmielony (Agtron)</label>
+  <input type="number" step="0.1" id="qeditGround" style="width:100%; padding:6px 10px; border:1px solid #d8cbb9; border-radius:6px; margin-top:2px;">
+  <label style="display:block; font-size:13px; color:#776a5a; margin-top:8px;">Waga po (g)</label>
+  <input type="number" step="1" id="qeditWeight" style="width:100%; padding:6px 10px; border:1px solid #d8cbb9; border-radius:6px; margin-top:2px;">
+  <div id="qeditError" style="color:#8a3b3b; font-size:12px; margin-top:8px; display:none;"></div>
+  <div style="display:flex; gap:8px; margin-top:16px;">
+    <button type="button" id="qeditSave" style="flex:1;">Zapisz</button>
+    <button type="button" id="qeditCancel" style="flex:1; background:#efe4d9; color:var(--brown);">Anuluj</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const overlay = document.getElementById('qeditOverlay');
+  const modal = document.getElementById('qeditModal');
+  const nameEl = document.getElementById('qeditRoastName');
+  const wholeEl = document.getElementById('qeditWhole');
+  const groundEl = document.getElementById('qeditGround');
+  const weightEl = document.getElementById('qeditWeight');
+  const errEl = document.getElementById('qeditError');
+  const saveBtn = document.getElementById('qeditSave');
+  const cancelBtn = document.getElementById('qeditCancel');
+  let activePrfl = null;
+  let activeRowCells = null;
+
+  function pillHtml(val, unit) {
+    if (val === null || val === undefined || val === '') return '<span class="pill missing">—</span>';
+    return '<span class="pill ok">' + val + (unit || '') + '</span>';
+  }
+
+  function parseCellValue(cell) {
+    const txt = cell.textContent.trim();
+    if (txt === '—' || txt === '') return '';
+    return txt.replace('kg', '').trim();
+  }
+
+  function openModal(cell) {
+    activePrfl = cell.getAttribute('data-prfl');
+    const row = cell.closest('tr');
+    activeRowCells = {
+      whole_c: row.querySelector('[data-field="whole_c"]'),
+      ground_c: row.querySelector('[data-field="ground_c"]'),
+      weight_kg: row.querySelector('[data-field="weight_kg"]'),
+    };
+    const nameCell = row.querySelector('a.row-link');
+    nameEl.textContent = nameCell ? nameCell.textContent.trim() : '';
+    wholeEl.value = parseCellValue(activeRowCells.whole_c);
+    groundEl.value = parseCellValue(activeRowCells.ground_c);
+    const w = parseCellValue(activeRowCells.weight_kg);
+    weightEl.value = w ? Math.round(parseFloat(w) * 1000) : '';
+    errEl.style.display = 'none';
+    overlay.style.display = 'block';
+    modal.style.display = 'block';
+    wholeEl.focus();
+  }
+
+  function closeModal() {
+    overlay.style.display = 'none';
+    modal.style.display = 'none';
+    activePrfl = null;
+    activeRowCells = null;
+  }
+
+  document.querySelectorAll('td.qedit').forEach(function (cell) {
+    cell.style.cursor = 'pointer';
+    cell.addEventListener('click', function () { openModal(cell); });
+  });
+
+  overlay.addEventListener('click', closeModal);
+  cancelBtn.addEventListener('click', closeModal);
+
+  saveBtn.addEventListener('click', function () {
+    if (!activePrfl) return;
+    errEl.style.display = 'none';
+    const body = new URLSearchParams();
+    if (wholeEl.value) body.set('whole_color', wholeEl.value);
+    if (groundEl.value) body.set('ground_color', groundEl.value);
+    if (weightEl.value) body.set('weight_g', weightEl.value);
+    fetch('/api/roast/' + encodeURIComponent(activePrfl) + '/quick-edit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    })
+      .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+      .then(function (result) {
+        if (!result.ok) {
+          errEl.textContent = result.data.error || 'Błąd zapisu.';
+          errEl.style.display = 'block';
+          return;
+        }
+        activeRowCells.whole_c.innerHTML = pillHtml(result.data.whole_c);
+        activeRowCells.ground_c.innerHTML = pillHtml(result.data.ground_c);
+        activeRowCells.weight_kg.innerHTML = pillHtml(result.data.weight_kg, 'kg');
+        closeModal();
+      })
+      .catch(function () {
+        errEl.textContent = 'Błąd połączenia.';
+        errEl.style.display = 'block';
+      });
+  });
+
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape' && modal.style.display === 'block') closeModal();
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,15 @@
+services:
+  zeroflame:
+    build: .
+    image: zeroflame:latest
+    container_name: zeroflame
+    restart: unless-stopped
+    ports:
+      - "8088:8088"
+    env_file:
+      - .env
+    volumes:
+      - zeroflame_data:/app/data
+
+volumes:
+  zeroflame_data:

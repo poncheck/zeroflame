@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Magazyn kaw — cukru.coffee{% endblock %}
+{% block content %}
+<div class="stat-grid">
+  <div class="stat"><div class="num">{{ total_beans }}</div><div class="label">Ziaren w historii</div></div>
+  <div class="stat"><div class="num">{{ active_beans }}</div><div class="label">Aktywne w Boost</div></div>
+  <div class="stat"><div class="num">{{ total_roasts_with_bean }}</div><div class="label">Wypałów z przypisanym ziarnem</div></div>
+</div>
+
+<form class="filters" method="get">
+  <select name="status" onchange="this.form.submit()">
+    <option value="" {% if not status_filter %}selected{% endif %}>Wszystkie</option>
+    <option value="active" {% if status_filter=='active' %}selected{% endif %}>Tylko aktywne (w Boost)</option>
+    <option value="historical" {% if status_filter=='historical' %}selected{% endif %}>Tylko historyczne</option>
+  </select>
+  <select name="tag" onchange="this.form.submit()">
+    <option value="" {% if not tag_filter %}selected{% endif %}>Wszystkie tagi</option>
+    {% for t in all_tags %}
+    <option value="{{ t }}" {% if tag_filter==t %}selected{% endif %}>#{{ t }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+<table class="sortable">
+<thead>
+<tr>
+  <th>Kod / nazwa</th>
+  <th>Kraj</th>
+  <th>Region</th>
+  <th>Farma</th>
+  <th>Odmiana</th>
+  <th>Obróbka</th>
+  <th>Tagi</th>
+  <th>Status</th>
+  <th>Stan (Boost) kg</th>
+  <th>Zużyte (suma) kg</th>
+  <th>Wypałów</th>
+  <th>Batchy</th>
+  <th>Ostatnie użycie</th>
+  <th>Akcje</th>
+</tr>
+</thead>
+<tbody>
+{% for b in beans %}
+<tr>
+  <td><a class="row-link" href="{{ url_for('inventory_detail', code=b['code']) }}">{{ b['full_name'] or b['code'] }}</a></td>
+  <td>{{ b['country'] or '—' }}</td>
+  <td>{{ b['region'] or '—' }}</td>
+  <td>{{ b['farm'] or '—' }}</td>
+  <td>{{ b['variety'] or '—' }}</td>
+  <td>{{ b['processing'] or '—' }}</td>
+  <td>
+    {% for t in tags_by_bean.get(b['code'], []) %}<span class="pill" style="margin-right:3px;">#{{ t }}</span>{% else %}—{% endfor %}
+  </td>
+  <td>
+    {% if b['status']=='active' %}<span class="pill ok">aktywne</span>
+    {% else %}<span class="pill">historyczne</span>{% endif %}
+  </td>
+  <td>{{ b['current_stock_kg'] if b['current_stock_kg'] is not none else '—' }}</td>
+  <td>{{ '%.1f'|format(-b['total_used_kg']) if b['total_used_kg'] else '—' }}</td>
+  <td>{{ b['roast_count'] }}</td>
+  <td>{{ b['batch_count'] if b['batch_count'] is not none else '—' }}</td>
+  <td>{{ (b['last_used'] or '')[:10] }}</td>
+  <td>
+    <form method="post" action="{{ url_for('inventory_set_status', code=b['code']) }}">
+      <input type="hidden" name="status" value="{{ 'historical' if b['status']=='active' else 'active' }}">
+      <input type="hidden" name="next" value="{{ request.full_path }}">
+      <button type="submit" style="font-size:12px; padding:4px 8px;">
+        {% if b['status']=='active' %}→ historyczne{% else %}→ aktywne{% endif %}
+      </button>
+    </form>
+  </td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endblock %}

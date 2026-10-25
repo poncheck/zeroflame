@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+{% block title %}{{ r['prfl_name'] }} — Boost Roasts{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('roasts_list') }}">« wróć do listy</a>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;">
+    <div style="flex:1; min-width:260px;">
+      <h2 style="margin-top:0;">{{ r['prfl_name'] }}</h2>
+      <dl class="meta">
+        <dt>Data wypału</dt><dd>{{ r['rst_dt_iso'] }}</dd>
+        <dt>Ziarno zielone</dt><dd>
+          {% if bean_in_inventory %}
+            <a class="row-link" href="{{ url_for('inventory_detail', code=r['bean_name']) }}">{{ r['bean_name'] }}</a>
+          {% else %}
+            {{ r['bean_name'] or '—' }}
+          {% endif %}
+        </dd>
+        <dt>Wsad (kg)</dt><dd>{{ r['grn_bean_amt'] or '—' }}</dd>
+        <dt>Tryb</dt><dd>{{ rst_mod_labels.get(r['rst_mod'], r['rst_mod']) }}</dd>
+        <dt>Poziom wypału</dt><dd>{{ rst_lvl_labels.get(r['rst_lvl'], r['rst_lvl']) }}</dd>
+        <dt>Profil oryginalny</dt><dd>
+          {% if original_profile_cd %}
+            <a class="row-link" href="{{ url_for('roast_detail', prfl_m_cd=original_profile_cd) }}">{{ r['up_prfl_name'] }}</a>
+          {% else %}
+            {{ r['up_prfl_name'] or '—' }}
+          {% endif %}
+        </dd>
+        <dt>Czas całkowity</dt><dd>{{ r['total_rst_time']|mmss }}</dd>
+        <dt>Turning point</dt><dd>{{ r['tp_time']|mmss }} @ {{ r['tp_in_c_temp'] }}°C</dd>
+        <dt>1st Crack</dt><dd>{{ r['first_crk_time']|mmss }} @ {{ r['first_crk_in_c_temp'] }}°C</dd>
+        <dt>2nd Crack</dt><dd>{{ r['second_crk_time']|mmss }}</dd>
+        <dt>Release</dt><dd>{{ r['dschg_time']|mmss }} @ {{ r['dschg_in_c_temp'] }}°C</dd>
+        <dt>Fazy</dt><dd>Drying {{ r['drying_ratio'] }}% / Yellowing {{ r['yellow_ratio'] }}% / Development {{ r['develop_ratio'] }}%</dd>
+        <dt>Dev time / DTR</dt><dd>{{ r['dev_time']|mmss }} / {{ r['dtr'] }}%</dd>
+        <dt>Notatki (Boost)</dt><dd>{{ r['memo'] or '—' }}</dd>
+      </dl>
+    </div>
+    {% if whole_row or ground_row %}
+    <div id="beanColorWidget" style="flex:0 0 auto; text-align:center; width:180px;"
+         data-whole="{{ whole_row['color_value'] if whole_row else '' }}"
+         data-ground="{{ ground_row['color_value'] if ground_row else '' }}">
+      <canvas id="beanColorCanvas" width="160" height="160" style="width:160px; height:160px;"></canvas>
+      <div id="beanColorLegend" style="font-size:12px; color:#776a5a; margin-top:6px; line-height:1.5;"></div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Krzywa temperatury i grzania</h3>
+  <canvas id="curveChart" height="90"></canvas>
+</div>
+
+<div class="card manual-form">
+  <h3 style="margin-top:0;">Dane ręczne</h3>
+  {% if loss_pct is not none %}
+    <p>Aktualna utrata wagi: <span class="loss">{{ loss_pct }}%</span>
+    ({{ r['grn_bean_amt'] }}kg → {{ weight_row['weight_kg'] }}kg)</p>
+  {% endif %}
+  <form method="post">
+    <label>Kolor ziarna całego (Agtron, ~40-70)
+      <input type="number" step="0.1" name="whole_color" id="wholeColorInput" value="{{ whole_row['color_value'] if whole_row else '' }}">
+    </label>
+    <label>Kolor ziarna zmielonego (Agtron, ~70-120)
+      <input type="number" step="0.1" name="ground_color" id="groundColorInput" value="{{ ground_row['color_value'] if ground_row else '' }}">
+    </label>
+    <label>Waga po wypaleniu (gramy, ~400-550g)
+      <input type="number" step="0.1" name="weight_g" value="{{ (weight_row['weight_kg'] * 1000) if weight_row else '' }}">
+    </label>
+    <label>Notatki
+      <input type="text" name="notes" value="{{ weight_row['notes'] if weight_row else (whole_row['notes'] if whole_row else '') }}">
+    </label>
+    <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <button type="submit">Zapisz</button>
+      <button type="button" id="bleConnectBtn" style="background:#2f6b8f;">🔌 Połącz z Omni (Bluetooth)</button>
+      <button type="button" id="bleMeasureBtn" style="background:#c9792b; display:none;">🔬 Zmierz Agtron</button>
+      <span id="bleStatus" style="font-size:12px; color:#776a5a;"></span>
+    </div>
+  </form>
+  <div id="omniPendingList" style="margin-top:14px; display:none;"></div>
+</div>
+
+<script>
+async function loadChart() {
+  const resp = await fetch("{{ url_for('roast_curve', prfl_m_cd=r['prfl_m_cd']) }}");
+  const data = await resp.json();
+  const labels = data.temps.map(t => t.rst_time);
+  const internal = data.temps.map(t => t.internal_c_temp);
+  const tower = data.temps.map(t => t.tower_drum_c_temp);
+  const hotair = data.temps.map(t => t.hot_air_c_temp);
+
+  const canvas = document.getElementById('curveChart');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.parentElement.clientWidth;
+  canvas.height = 320;
+
+  const allVals = internal.concat(tower, hotair).filter(v => v != null);
+  const minV = Math.min(...allVals, 0);
+  const maxV = Math.max(...allVals, 100);
+  const padL = 50, padB = 30, padT = 10, padR = 10;
+  const w = canvas.width - padL - padR;
+  const h = canvas.height - padT - padB;
+
+  function x(i) { return padL + (i / (labels.length - 1)) * w; }
+  function y(v) { return padT + h - ((v - minV) / (maxV - minV)) * h; }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // axes
+  ctx.strokeStyle = '#ccc';
+  ctx.beginPath();
+  ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + h); ctx.lineTo(padL + w, padT + h);
+  ctx.stroke();
+  ctx.fillStyle = '#776a5a';
+  ctx.font = '11px sans-serif';
+  for (let i = 0; i <= 5; i++) {
+    const v = minV + (maxV - minV) * i / 5;
+    const yy = y(v);
+    ctx.fillText(v.toFixed(0), 4, yy + 4);
+    ctx.strokeStyle = '#eee';
+    ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + w, yy); ctx.stroke();
+  }
+
+  function drawLine(series, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let started = false;
+    series.forEach((v, i) => {
+      if (v == null) return;
+      const px = x(i), py = y(v);
+      if (!started) { ctx.moveTo(px, py); started = true; } else { ctx.lineTo(px, py); }
+    });
+    ctx.stroke();
+  }
+  drawLine(internal, '#c9792b');
+  drawLine(tower, '#6f4e37');
+  drawLine(hotair, '#2f6b8f');
+
+  // legend
+  const legend = [['Internal', '#c9792b'], ['Tower/Drum', '#6f4e37'], ['Hot Air', '#2f6b8f']];
+  legend.forEach(([name, color], i) => {
+    const lx = padL + 10 + i * 140, ly = 16;
+    ctx.fillStyle = color;
+    ctx.fillRect(lx, ly - 8, 10, 10);
+    ctx.fillStyle = '#2b2015';
+    ctx.fillText(name, lx + 14, ly);
+  });
+}
+loadChart();
+
+function agtronToColor(v) {
+  if (v === null || v === undefined || isNaN(v)) return null;
+  const clamped = Math.max(25, Math.min(95, v));
+  const t = (clamped - 25) / (95 - 25);
+  const dark = [42, 24, 14];
+  const light = [226, 188, 138];
+  const r = Math.round(dark[0] + (light[0] - dark[0]) * t);
+  const g = Math.round(dark[1] + (light[1] - dark[1]) * t);
+  const b = Math.round(dark[2] + (light[2] - dark[2]) * t);
+  return `rgb(${r},${g},${b})`;
+}
+
+function drawBeanColorWidget() {
+  const widget = document.getElementById('beanColorWidget');
+  if (!widget) return;
+  const whole = parseFloat(widget.getAttribute('data-whole'));
+  const ground = parseFloat(widget.getAttribute('data-ground'));
+  const hasWhole = !isNaN(whole);
+  const hasGround = !isNaN(ground);
+
+  const canvas = document.getElementById('beanColorCanvas');
+  const ctx = canvas.getContext('2d');
+  const size = 160;
+  canvas.width = size;
+  canvas.height = size;
+  const cx = size / 2, cy = size / 2, r = size / 2 - 8;
+
+  const outerColor = hasWhole ? agtronToColor(whole) : '#d8cbb9';
+  const innerColor = hasGround ? agtronToColor(ground) : (hasWhole ? agtronToColor(whole) : '#d8cbb9');
+
+  // radial gradient: roasted interior (ground color) at the core, fading to the
+  // surface color (whole bean) at the edge — a cross-section of the roasted bean
+  const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  grad.addColorStop(0, innerColor);
+  grad.addColorStop(0.55, innerColor);
+  grad.addColorStop(1, outerColor);
+
+  ctx.clearRect(0, 0, size, size);
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // subtle bean "crease" — a soft curved line, evoking the coffee bean's center cut
+  ctx.save();
+  ctx.beginPath();
+  ctx.clip();
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.quadraticCurveTo(cx - 10, cy, cx, cy + r);
+  ctx.stroke();
+  ctx.restore();
+
+  // outer ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(58,47,34,0.35)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // legend text
+  const legend = document.getElementById('beanColorLegend');
+  const lines = [];
+  lines.push('<strong>Cały:</strong> ' + (hasWhole ? whole.toFixed(1) : '—') +
+              ' &nbsp; <strong>Zmielony:</strong> ' + (hasGround ? ground.toFixed(1) : '—'));
+  if (hasWhole && hasGround) {
+    const diff = ground - whole;
+    const absDiff = Math.abs(diff);
+    let note;
+    if (absDiff < 4) {
+      note = 'Równomierne wypalenie';
+    } else if (diff < 0) {
+      note = 'Wnętrze mocniej wypalone (ciemniejszy rdzeń)';
+    } else {
+      note = 'Wnętrze jaśniejsze niż powierzchnia';
+    }
+    lines.push('Różnica: ' + (diff > 0 ? '+' : '') + diff.toFixed(1) + ' Agtron');
+    lines.push('<span style="color:#9a8b73;">' + note + '</span>');
+  }
+  legend.innerHTML = lines.join('<br>');
+}
+drawBeanColorWidget();
+
+// ---------------------------------------------------------------------------
+// DiFluid Omni — direct Bluetooth (Web Bluetooth API), no bridge hardware needed.
+// Protocol per https://github.com/DiFluid/difluid-sdk-demo (protocolOmni.md):
+//   Service UUID 0000-00E0, characteristic AA01.
+//   Frame: DF DF | Func | Cmd | DataLen | Data... | Checksum(sum of preceding bytes & 0xFF)
+//   "Agtron test" (Func 3, Cmd 1) triggers a remote measurement on the device;
+//   result arrives later as Func 3, Cmd 3 ("Agtron Result") with a C struct:
+//     int32 type (0=Bean, 1=Powder), float32 agtron_avg, float32 histogram_X[7],
+//     float32 histogram_X_ratio[7], float32 var_value   (68 bytes total)
+// ---------------------------------------------------------------------------
+const OMNI_SERVICE_UUID = '000000e0-0000-1000-8000-00805f9b34fb';
+const OMNI_CHAR_UUID = '0000aa01-0000-1000-8000-00805f9b34fb';
+let omniChar = null;
+let omniRxBuffer = [];
+
+function omniBuildFrame(func, cmd, data) {
+  data = data || [];
+  const bytes = [0xDF, 0xDF, func, cmd, data.length].concat(data);
+  let sum = 0;
+  bytes.forEach(b => sum += b);
+  bytes.push(sum & 0xFF);
+  return new Uint8Array(bytes);
+}
+
+function omniHandleNotify(event) {
+  const value = event.target.value;
+  for (let i = 0; i < value.byteLength; i++) omniRxBuffer.push(value.getUint8(i));
+
+  // Look for a complete "Agtron Result" frame: DF DF 03 03 <len> ...data... <checksum>
+  while (omniRxBuffer.length >= 5) {
+    if (omniRxBuffer[0] !== 0xDF || omniRxBuffer[1] !== 0xDF) { omniRxBuffer.shift(); continue; }
+    const func = omniRxBuffer[2], cmd = omniRxBuffer[3], dataLen = omniRxBuffer[4];
+    const frameTotal = 5 + dataLen + 1;
+    if (omniRxBuffer.length < frameTotal) return; // wait for more notifications
+    const frame = omniRxBuffer.slice(0, frameTotal);
+    omniRxBuffer = omniRxBuffer.slice(frameTotal);
+
+    if (func === 3 && cmd === 3) {
+      // Agtron Result struct, little-endian: int32 type, float32 agtron_avg, ...
+      const data = new Uint8Array(frame.slice(5, 5 + dataLen));
+      const dv = new DataView(data.buffer);
+      const type = dv.getInt32(0, true);          // 0=Bean(whole), 1=Powder(ground)
+      const agtronAvg = dv.getFloat32(4, true);
+      const varValue = dv.getFloat32(4 + 4 + 28 + 28, true);
+      omniOnResult(type === 1 ? 'ground' : 'whole', agtronAvg, varValue);
+    }
+  }
+}
+
+function omniOnResult(kind, agtronAvg, varValue) {
+  const statusEl = document.getElementById('bleStatus');
+  const target = kind === 'whole' ? document.getElementById('wholeColorInput') : document.getElementById('groundColorInput');
+  target.value = agtronAvg.toFixed(1);
+  statusEl.textContent = (kind === 'whole' ? 'Cały' : 'Zmielony') + ': ' + agtronAvg.toFixed(1) +
+    ' Agtron (±' + varValue.toFixed(2) + ') — wpisane, kliknij Zapisz.';
+}
+
+document.getElementById('bleConnectBtn').addEventListener('click', async function () {
+  const statusEl = document.getElementById('bleStatus');
+  if (!navigator.bluetooth) {
+    statusEl.textContent = 'Ta przeglądarka nie wspiera Web Bluetooth (użyj Chrome/Edge na komputerze lub Androidzie).';
+    return;
+  }
+  try {
+    statusEl.textContent = 'Wybierz urządzenie Omni w oknie przeglądarki...';
+    const device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [OMNI_SERVICE_UUID] }],
+      optionalServices: [OMNI_SERVICE_UUID],
+    });
+    statusEl.textContent = 'Łączenie...';
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(OMNI_SERVICE_UUID);
+    omniChar = await service.getCharacteristic(OMNI_CHAR_UUID);
+    await omniChar.startNotifications();
+    omniChar.addEventListener('characteristicvaluechanged', omniHandleNotify);
+    statusEl.textContent = 'Połączono z ' + (device.name || 'Omni') + '.';
+    document.getElementById('bleMeasureBtn').style.display = 'inline-block';
+    device.addEventListener('gattserverdisconnected', function () {
+      statusEl.textContent = 'Rozłączono.';
+      document.getElementById('bleMeasureBtn').style.display = 'none';
+      omniChar = null;
+    });
+  } catch (e) {
+    statusEl.textContent = 'Nie połączono: ' + (e.message || e);
+  }
+});
+
+document.getElementById('bleMeasureBtn').addEventListener('click', async function () {
+  const statusEl = document.getElementById('bleStatus');
+  if (!omniChar) { statusEl.textContent = 'Najpierw połącz z urządzeniem.'; return; }
+  try {
+    omniRxBuffer = [];
+    statusEl.textContent = 'Pomiar w toku na urządzeniu...';
+    await omniChar.writeValue(omniBuildFrame(3, 1, [])); // Func 3 Cmd 1 = "Agtron test"
+  } catch (e) {
+    statusEl.textContent = 'Błąd pomiaru: ' + (e.message || e);
+  }
+});
+</script>
+{% endblock %}
