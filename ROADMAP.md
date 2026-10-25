@@ -58,6 +58,52 @@ cupping scores directly to `roast_id`/`bean_id` turns it into a feedback
 loop: roast → taste → adjust next roast of that lot — without re-typing
 anything.
 
+## Mobile / PWA + responsive design
+
+Currently the UI is desktop-oriented (built for the roasting station
+screen). Two related but separate pieces of work:
+
+### 1. Responsive design (prerequisite)
+
+- Audit every template (`base.html`, `index.html`, `roasts.html`,
+  `detail.html`, `inventory.html`, `login.html`) for fixed-width layouts,
+  tables that don't wrap, and the temperature chart (likely needs a
+  touch-friendly/zoomable chart library swap or at least a mobile
+  breakpoint that simplifies it).
+- Target breakpoints: phone (iPhone, ~390-430px wide), tablet (iPad, used
+  at the cupping table / roasting station), desktop.
+- Quick-edit modal (color/weight) and the DiFluid Omni BLE flow already
+  need to work well on a phone screen — BLE pairing from a phone is
+  actually a more natural use case than from a desktop.
+- Navigation: hamburger/bottom-tab nav on narrow screens instead of the
+  current top bar.
+
+### 2. "Add to Home Screen" on iPhone (PWA basics)
+
+iOS Safari turns a site into something that looks/feels like an app icon
+on the home screen if it has:
+
+- A `manifest.json` (name, short_name, icons at multiple sizes, 
+  `display: standalone`, theme/background color using the Zeroflame
+  logo/palette).
+- `<link rel="apple-touch-icon" href="...">` + the standard favicon set
+  (iOS ignores `manifest.json`'s icons for the home-screen icon itself —
+  needs the explicit `apple-touch-icon` tag).
+- `<meta name="apple-mobile-web-app-capable" content="yes">` and
+  `apple-mobile-web-app-status-bar-style` for a native-feeling status bar
+  instead of showing Safari's UI chrome.
+- A minimal service worker (even just for offline-fallback/caching static
+  assets) — strictly needed for Chrome/Android's "Install app" prompt;
+  iOS Safari will add to home screen without one, but a service worker is
+  still worth having for basic offline tolerance (e.g. viewing the last
+  loaded roast if wifi drops at the roaster).
+- HTTPS is required for most PWA features — already satisfied in
+  production (`roasting.cukru.cafe` has a valid Let's Encrypt cert).
+
+Once both are done: on iPhone, Safari → Share → "Add to Home Screen" gives
+a proper app icon + launches full-screen without browser chrome, which is
+the practical goal here (no App Store submission needed).
+
 ## Other system improvements (backlog, not yet scheduled)
 
 - **Production WSGI server** — replace Flask's dev server (currently
