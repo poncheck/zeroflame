@@ -138,6 +138,9 @@ Dockerfile
 docker-compose.yml
 ```
 
+See [ROADMAP.md](ROADMAP.md) for planned features (cupping module and more).
+
+
 ## DiFluid Omni Bluetooth integration
 
 The roast detail page can connect directly to a DiFluid Omni colorimeter
