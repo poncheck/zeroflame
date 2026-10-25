@@ -51,6 +51,9 @@ full details on each item):
       behind the reverse proxy (currently running in production with the
       dev-server warning).
 - [ ] **Automated backups** on the production host (cron + rotation).
+- [ ] **User accounts, roles & permissions** — self-service password
+      change, admin user-management panel, role-based permissions
+      (admin/roaster/viewer).
 - [ ] **Responsive design** — make every page usable on phone/tablet
       (prerequisite for the item below).
 - [ ] **Add to iPhone home screen** (PWA basics — manifest, apple-touch-icon,
@@ -66,7 +69,6 @@ full details on each item):
       generated at end of day alongside the GoStock production push.
 - [ ] **Multilanguage support** — PL (default) / EN / KO, per-user language
       switch.
-- [ ] Role-based accounts (admin vs. read-only viewer).
 - [ ] CSV/JSON export from the dashboard.
 - [ ] Low-stock alerts.
 - [ ] Cost tracking (COGS) per green-bean lot.

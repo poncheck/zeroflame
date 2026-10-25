@@ -192,6 +192,51 @@ cash reports and calorie lookups via `/ajax/5637/products`,
   weight out — Zeroflame already captures post-roast weight per roast,
   so the shrink % is available for the production record).
 
+## User accounts, roles & permissions
+
+Currently auth is minimal: one flat `users` table (username + password
+hash), no self-service account management, no distinction between
+accounts beyond who's logged in. Needed before barista accounts get
+added for real (Magda already has bot access; this is about the
+Zeroflame web UI itself).
+
+### Self-service password change
+
+- A simple "my account" page where any logged-in user changes their own
+  password (old password required, new password hashed with werkzeug —
+  same mechanism already used for login).
+- No admin involvement needed for a routine password change — currently
+  the only way to change a password is a direct DB edit (as done
+  manually during the production deploy test).
+
+### Admin profile / user management panel
+
+- An admin-only page to list all users, create new accounts (replacing
+  the current `ADMIN_USERNAME`/`ADMIN_PASSWORD` one-time bootstrap-only
+  flow), reset another user's password, deactivate/remove an account.
+- Needed once there's more than one or two people using the system
+  (Magda, baristas, Anna) — right now account creation requires editing
+  `auth.db` directly via a script.
+
+### Roles with specific permissions
+
+Replace the current "every logged-in user can do everything" model with
+a small set of roles, each with a defined permission set:
+
+- **Admin** — full access: user management, all roast/inventory data,
+  configuration.
+- **Roaster** — full access to roast log + green bean inventory (create/
+  edit roasts, manual color/weight entries, inventory adjustments) but no
+  user management.
+- **Viewer** — read-only: browse roasts, dashboard, inventory, but can't
+  edit anything. Useful for Anna (purchasing) or anyone who just needs to
+  check numbers without risk of accidental edits.
+- Permission checks enforced server-side (decorator on each Flask route,
+  not just hiding UI elements) so this is a real access boundary, not
+  cosmetic.
+- Role assignment lives on the `users` table (a `role` column) and is
+  only editable from the admin panel above.
+
 ## Bag/batch label printing
 
 At the end of each roasting day, generate simple printable labels for
@@ -254,8 +299,6 @@ Korean as well, with Polish as default.
 - **Automated backups on the production host** — cron job + rotation
   (the first production data load was a manual one-off backup/restore).
 - **CSV/JSON export** from the dashboard for external reporting.
-- **Role-based accounts** — admin vs. read-only viewer, needed once
-  barista accounts get added (currently all users have full access).
 - **Low-stock alerts** — notify when a specific green-bean lot drops
   below a threshold.
 - **Cost tracking (COGS)** per green-bean lot/batch, possibly synced
