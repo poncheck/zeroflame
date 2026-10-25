@@ -151,6 +151,30 @@ cash reports and calorie lookups via `/ajax/5637/products`,
   weight out — Zeroflame already captures post-roast weight per roast,
   so the shrink % is available for the production record).
 
+## Bag/batch label printing
+
+At the end of each roasting day, generate simple printable labels for
+each roasted batch of a given green bean — one label per batch (or per
+bag), covering what's needed on the packaging: bean/origin name, roast
+date, batch/lot reference, and optionally the roast profile name.
+
+- Trigger: same end-of-day "close the day" action as the GoStock
+  production push above — natural to generate both from the same batch
+  summary (one pass over "what got roasted today, grouped by bean").
+- Output: PDF, sized for a basic label printer (or just letter/A4 sheet
+  of multiple labels to cut by hand, for a cheap start without needing a
+  dedicated label printer).
+- Reuse existing PDF tooling already used elsewhere in the cukru.cafe
+  stack (WeasyPrint + Josefin Sans, same approach as the beer tap label
+  generator) rather than introducing a new PDF library.
+- Content kept intentionally simple for v1: bean name, roast date,
+  batch number. Can grow later (e.g. a QR/barcode linking back to the
+  roast record or a cupping score, once the cupping module exists) but
+  that's explicitly out of scope for the first version.
+- Needs a decision on label size/printer hardware before implementation
+  (thermal label printer vs. regular printer + adhesive label sheets) —
+  open question, not yet settled.
+
 ## Multilanguage support (PL / EN / KO)
 
 Currently everything is hardcoded in Polish (UI labels, button text,

@@ -59,6 +59,8 @@ full details on each item):
       multi-taster sessions, blind coding.
 - [ ] **GoStock (stock.gopos.io) integration** — sync green-bean inventory
       + push daily production into GoStock bundles.
+- [ ] **Bag/batch label printing** — simple PDF labels per roasted batch,
+      generated at end of day alongside the GoStock production push.
 - [ ] **Multilanguage support** — PL (default) / EN / KO, per-user language
       switch.
 - [ ] Role-based accounts (admin vs. read-only viewer).
