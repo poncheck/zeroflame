@@ -57,6 +57,9 @@ full details on each item):
       standalone mode).
 - [ ] **Cupping module** — SCA scoring linked to `roast_id`/`bean_id`,
       multi-taster sessions, blind coding.
+- [ ] **IKAWA sample roaster import** — import IKAWA test-roast CSV
+      exports as sample roasts linked to a green-bean lot (feeds the
+      cupping module once it exists).
 - [ ] **GoStock (stock.gopos.io) integration** — sync green-bean inventory
       + push daily production into GoStock bundles.
 - [ ] **Bag/batch label printing** — simple PDF labels per roasted batch,

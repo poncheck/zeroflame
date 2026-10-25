@@ -58,6 +58,47 @@ cupping scores directly to `roast_id`/`bean_id` turns it into a feedback
 loop: roast → taste → adjust next roast of that lot — without re-typing
 anything.
 
+## IKAWA sample roaster integration
+
+IKAWA Pro sample roasters are commonly used for small-batch test roasts
+before scaling a profile up to the production roaster (the Stronghold/
+Boost machine Zeroflame already tracks) — exactly the kind of "dial in a
+new lot" workflow that should feed into both the roast database and the
+future cupping module.
+
+### What's available
+
+- IKAWA doesn't expose a public developer API, but the IKAWA Pro app
+  exports full per-roast telemetry (timestamped bean temp, programmed vs.
+  actual setpoint, fan %, heater %, roast state) as CSV/JSON per roast.
+- IKAWA already ships an official integration with Cropster (roast data
+  pushed from the IKAWA app to Cropster's cloud platform, matched against
+  registered green-coffee lots/samples) — confirms this kind of
+  integration is something IKAWA actively supports via export, even
+  without a public API for third parties.
+
+### Approach
+
+- Start with **CSV import**, following the same pattern already used for
+  historical Boost data (`scripts/boost_import_csv.py`): a
+  `scripts/ikawa_import_csv.py` that reads an IKAWA roast-graph export and
+  inserts it as a roast record, tagged with a `source` field
+  (`boost` vs. `ikawa`) so the two machines' roasts are distinguishable in
+  the dashboard/roast list but share the same schema/views.
+- Treat IKAWA roasts explicitly as **sample/test roasts**, not production
+  roasts — link them to a `bean_id` (green lot) the same way production
+  roasts are, so a lot's full history (sample roasts on IKAWA → chosen
+  profile → production roast on Stronghold → cupping score) stays
+  traceable end to end in one place.
+- If/when the cupping module exists, an IKAWA sample roast becomes a
+  natural `cupping_samples.roast_id` target — this is the main reason to
+  prioritize IKAWA import before or alongside the cupping module rather
+  than as a fully separate feature.
+- Longer term, if IKAWA ever opens a local-network API (some sample
+  roasters expose a LAN API for live telemetry), revisit automatic sync
+  instead of manual CSV export — not assumed available today, needs
+  re-checking before committing to that approach.
+
 ## Mobile / PWA + responsive design
 
 Currently the UI is desktop-oriented (built for the roasting station
