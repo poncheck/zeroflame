@@ -176,6 +176,30 @@ docker-compose.yml
 
 See [ROADMAP.md](ROADMAP.md) for planned features (cupping module and more).
 
+## Managing users via CLI (inside Docker)
+
+Until the web-based admin panel exists (see [ROADMAP.md](ROADMAP.md)),
+user accounts are managed with `scripts/manage_users.py`, run inside the
+running container with `docker compose exec`:
+
+```bash
+# Add a new admin account
+docker compose exec zeroflame python3 scripts/manage_users.py create-admin <username> <password>
+
+# Add a regular (non-admin) account
+docker compose exec zeroflame python3 scripts/manage_users.py create-user <username> <password>
+
+# Change any user's password (e.g. if someone forgot theirs)
+docker compose exec zeroflame python3 scripts/manage_users.py set-password <username> <new_password>
+
+# List all accounts
+docker compose exec zeroflame python3 scripts/manage_users.py list
+```
+
+Run these from the directory containing `docker-compose.yml` on the
+server. No restart needed — changes apply immediately (and the running
+container doesn't need to be stopped).
+
 
 ## DiFluid Omni Bluetooth integration
 
