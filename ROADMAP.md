@@ -3,6 +3,38 @@
 Working notes on planned features. Nothing here is committed to a specific
 release — this is a backlog to pull from.
 
+## Edit bean/lot after roasting
+
+Currently the green-bean assigned to a roast (`bean_name`/`bean_cd`) comes
+straight from Boost and is effectively fixed — there's no way to fix it
+from the Zeroflame UI if it was wrong or missing at roast time (e.g. the
+historical "9301st roasting" case with an empty bean field, or a roast
+synced before someone picked the correct bean in Boost).
+
+### Why this matters now
+
+- Inventory usage (`stock_movements`) is auto-derived from each roast's
+  bean assignment — if the bean is wrong/missing, stock deduction is
+  wrong/missing too. Right now the only fix is a manual DB edit.
+- Needed before the cupping module and IKAWA import land, since both
+  rely on a roast having a correct `bean_id`/`bean_cd` to link against.
+
+### Approach
+
+- Add an editable bean field to the roast detail page, reusing the
+  existing quick-edit modal pattern already used for color/weight.
+- Dropdown/autocomplete sourced from `beans` (green bean inventory)
+  rather than free text, to avoid creating accidental duplicate/typo'd
+  bean codes.
+- On change: re-run the same stock-movement logic `inventory_sync.py`
+  already uses for auto-tracking usage — reverse the old bean's
+  deduction (if any) and apply the new one, so inventory stays correct
+  after a correction instead of double-counting or leaving stale usage.
+- Keep an audit trail (who changed it, old value, new value, when) —
+  same reasoning as the role/permissions work: this edits data that
+  feeds inventory and future cupping links, so silent overwrites aren't
+  acceptable once more than one person can make this change.
+
 ## Cupping module
 
 The core idea: cupping sessions should link directly to existing roast

@@ -51,6 +51,9 @@ full details on each item):
       behind the reverse proxy (currently running in production with the
       dev-server warning).
 - [ ] **Automated backups** on the production host (cron + rotation).
+- [ ] **Edit bean/lot after roasting** — fix a wrong/missing bean
+      assignment from the roast detail page, with inventory
+      stock-movement correction.
 - [ ] **User accounts, roles & permissions** — self-service password
       change, admin user-management panel, role-based permissions
       (admin/roaster/viewer).
