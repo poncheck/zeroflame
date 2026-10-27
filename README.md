@@ -57,9 +57,9 @@ full details on each item):
 - [ ] **User accounts, roles & permissions** — self-service password
       change, admin user-management panel, role-based permissions
       (admin/roaster/viewer).
-- [ ] **Responsive design** — make every page usable on phone/tablet
+- [x] **Responsive design** — make every page usable on phone/tablet
       (prerequisite for the item below).
-- [ ] **Add to iPhone home screen** (PWA basics — manifest, apple-touch-icon,
+- [x] **Add to iPhone home screen** (PWA basics — manifest, apple-touch-icon,
       standalone mode).
 - [ ] **Cupping module** — SCA scoring linked to `roast_id`/`bean_id`,
       multi-taster sessions, blind coding.
