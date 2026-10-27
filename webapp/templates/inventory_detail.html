@@ -95,6 +95,7 @@
   </form>
 
   {% if moisture_readings %}
+  <div class="table-wrap">
   <table class="sortable" style="margin-top:16px;">
     <thead>
       <tr><th>Data</th><th>Wilgotność (%)</th><th>Gęstość (g/l)</th><th>Temp. ziarna (°C)</th><th>Notatki</th><th></th></tr>
@@ -116,12 +117,14 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}
   <p style="margin-top:14px; color:#776a5a;">Brak jeszcze zapisanych odczytów.</p>
   {% endif %}
 </div>
 
 <h3>Historia ruchów magazynowych (ostatnie 500)</h3>
+<div class="table-wrap">
 <table class="sortable">
 <thead>
 <tr><th>Data</th><th>Typ</th><th>Ilość (kg)</th><th>Źródło</th><th>Notatki</th><th>Wypał</th></tr>
@@ -145,4 +148,5 @@
 {% endfor %}
 </tbody>
 </table>
+</div>
 {% endblock %}

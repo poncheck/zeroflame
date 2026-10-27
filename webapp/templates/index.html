@@ -23,6 +23,7 @@
 
 <div class="card">
   <h3 style="margin-top:0;">Ostatnie wypały</h3>
+  <div class="table-wrap">
   <table class="sortable">
     <thead><tr><th>Nazwa</th><th>Data</th><th>Ziarno</th><th>Wsad (kg)</th><th>Dev time</th><th>DTR %</th></tr></thead>
     <tbody>
@@ -44,6 +45,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 
 {% if today_chart_data %}

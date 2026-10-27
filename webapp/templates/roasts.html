@@ -14,6 +14,7 @@
 
 <p>Znaleziono: <strong>{{ total }}</strong> wypałów (strona {{ page }}/{{ total_pages }})</p>
 
+<div class="table-wrap">
 <table>
   <thead>
     <tr>
@@ -58,6 +59,7 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 
 <div class="pagination">
   {% if page > 1 %}<a href="?q={{ q }}&bean={{ bean }}&sort={{ sort }}&dir={{ direction }}&page={{ page - 1 }}">« poprzednia</a>{% endif %}

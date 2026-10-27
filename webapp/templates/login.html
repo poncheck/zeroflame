@@ -2,8 +2,18 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Logowanie — Zeroflame</title>
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<meta name="theme-color" content="#6f4e37">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Zeroflame">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-180.png') }}">
+
 <style>
   :root { --brown: #6f4e37; --cream: #fbf5ef; --accent: #c9792b; }
   * { box-sizing: border-box; }
@@ -16,6 +26,7 @@
   .login-card {
     background: #fff; border-radius: 12px; padding: 32px 36px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 320px;
+    max-width: calc(100vw - 32px);
   }
   .login-card h1 {
     font-size: 20px; color: var(--brown); margin: 0 0 20px 0; text-align: center;
@@ -23,7 +34,7 @@
   label { display: block; font-size: 13px; color: #776a5a; margin-top: 12px; }
   input[type=text], input[type=password] {
     width: 100%; padding: 8px 10px; border: 1px solid #d8cbb9;
-    border-radius: 6px; margin-top: 4px; font-size: 14px;
+    border-radius: 6px; margin-top: 4px; font-size: 16px; /* 16px avoids iOS auto-zoom on focus */
   }
   button {
     width: 100%; background: var(--accent); color: #fff; border: none;

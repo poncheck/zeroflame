@@ -2,8 +2,22 @@
 <html lang="pl">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>{% block title %}Zeroflame{% endblock %}</title>
 <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
+
+<!-- PWA: installable, "Add to Home Screen" support (Android + iOS) -->
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<meta name="theme-color" content="#6f4e37">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- iOS-specific "Add to Home Screen" tags (iOS ignores the manifest for this) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Zeroflame">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-180.png') }}">
+<link rel="apple-touch-icon" sizes="152x152" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+<link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/icon-180.png') }}">
+
 <style>
   :root { --brown: #6f4e37; --cream: #fbf5ef; --accent: #c9792b; }
   * { box-sizing: border-box; }
@@ -44,6 +58,33 @@
   table.sortable th { cursor: pointer; user-select: none; white-space: nowrap; }
   table.sortable th:hover { background: #e6d8c6; }
   table.sortable th .arrow { font-size: 10px; margin-left: 4px; opacity: 0.6; }
+  .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+  .table-wrap table { min-width: 560px; }
+
+  /* ---------------- Responsive design (phones / small tablets) ---------------- */
+  @media (max-width: 720px) {
+    header { padding: 10px 14px; flex-wrap: wrap; gap: 6px; }
+    header nav { display: flex; flex-wrap: wrap; gap: 4px 12px; width: 100%; }
+    header nav a { margin-left: 0; }
+    main { padding: 12px 10px; }
+    .card { padding: 12px 14px; }
+    .stat-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+    .stat { padding: 10px 12px; }
+    .stat .num { font-size: 21px; }
+    th, td { padding: 7px 8px; font-size: 13px; }
+    dl.meta { grid-template-columns: 1fr; row-gap: 2px; }
+    dl.meta dt { margin-top: 10px; }
+    dl.meta dt:first-child { margin-top: 0; }
+    form.filters { flex-direction: column; align-items: stretch; }
+    form.filters input, form.filters select, form.filters button { width: 100%; }
+    .manual-form input { font-size: 16px; } /* 16px prevents iOS auto-zoom on focus */
+    button, input[type=submit] { padding: 9px 16px; font-size: 15px; } /* bigger tap targets */
+    .pagination { justify-content: center; }
+  }
+  @media (max-width: 480px) {
+    header a[href] > img { height: 20px; width: 20px; }
+    header nav span { display: block; margin-left: 0 !important; margin-top: 4px; }
+  }
 </style>
 </head>
 <body>
