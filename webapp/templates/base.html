@@ -22,7 +22,11 @@
   :root { --brown: #6f4e37; --cream: #fbf5ef; --accent: #c9792b; }
   * { box-sizing: border-box; }
   body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: var(--cream); color: #2b2015; }
-  header { background: var(--brown); color: #fff; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; }
+  header {
+    background: var(--brown); color: #fff; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
+    /* Push content below the iPhone status bar / notch when running as an installed PWA (standalone mode) */
+    padding-top: calc(14px + env(safe-area-inset-top));
+  }
   header a { color: #fff; text-decoration: none; font-weight: 600; }
   header nav a { margin-left: 16px; opacity: 0.85; font-weight: 400; }
   header nav a:hover { opacity: 1; text-decoration: underline; }
@@ -63,7 +67,7 @@
 
   /* ---------------- Responsive design (phones / small tablets) ---------------- */
   @media (max-width: 720px) {
-    header { padding: 10px 14px; flex-wrap: wrap; gap: 6px; }
+    header { padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top)); flex-wrap: wrap; gap: 6px; }
     header nav { display: flex; flex-wrap: wrap; gap: 4px 12px; width: 100%; }
     header nav a { margin-left: 0; }
     main { padding: 12px 10px; }
