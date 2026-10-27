@@ -58,25 +58,30 @@
     <p>Aktualna utrata wagi: <span class="loss">{{ loss_pct }}%</span>
     ({{ r['grn_bean_amt'] }}kg → {{ weight_row['weight_kg'] }}kg)</p>
   {% endif %}
+  {% set can_edit = session.get('role') in ('admin', 'roaster') %}
   <form method="post">
     <label>Kolor ziarna całego (Agtron, ~40-70)
-      <input type="number" step="0.1" name="whole_color" id="wholeColorInput" value="{{ whole_row['color_value'] if whole_row else '' }}">
+      <input type="number" step="0.1" name="whole_color" id="wholeColorInput" value="{{ whole_row['color_value'] if whole_row else '' }}" {% if not can_edit %}disabled{% endif %}>
     </label>
     <label>Kolor ziarna zmielonego (Agtron, ~70-120)
-      <input type="number" step="0.1" name="ground_color" id="groundColorInput" value="{{ ground_row['color_value'] if ground_row else '' }}">
+      <input type="number" step="0.1" name="ground_color" id="groundColorInput" value="{{ ground_row['color_value'] if ground_row else '' }}" {% if not can_edit %}disabled{% endif %}>
     </label>
     <label>Waga po wypaleniu (gramy, ~400-550g)
-      <input type="number" step="0.1" name="weight_g" value="{{ (weight_row['weight_kg'] * 1000) if weight_row else '' }}">
+      <input type="number" step="0.1" name="weight_g" value="{{ (weight_row['weight_kg'] * 1000) if weight_row else '' }}" {% if not can_edit %}disabled{% endif %}>
     </label>
     <label>Notatki
-      <input type="text" name="notes" value="{{ weight_row['notes'] if weight_row else (whole_row['notes'] if whole_row else '') }}">
+      <input type="text" name="notes" value="{{ weight_row['notes'] if weight_row else (whole_row['notes'] if whole_row else '') }}" {% if not can_edit %}disabled{% endif %}>
     </label>
+    {% if can_edit %}
     <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
       <button type="submit">Zapisz</button>
       <button type="button" id="bleConnectBtn" style="background:#2f6b8f;">🔌 Połącz z Omni (Bluetooth)</button>
       <button type="button" id="bleMeasureBtn" style="background:#c9792b; display:none;">🔬 Zmierz Agtron</button>
       <span id="bleStatus" style="font-size:12px; color:#776a5a;"></span>
     </div>
+    {% else %}
+    <p style="margin-top:12px; font-size:13px; color:#776a5a;">Tylko podgląd — Twoja rola (viewer) nie pozwala na edycję.</p>
+    {% endif %}
   </form>
   <div id="omniPendingList" style="margin-top:14px; display:none;"></div>
 </div>
@@ -291,46 +296,52 @@ function omniOnResult(kind, agtronAvg, varValue) {
     ' Agtron (±' + varValue.toFixed(2) + ') — wpisane, kliknij Zapisz.';
 }
 
-document.getElementById('bleConnectBtn').addEventListener('click', async function () {
-  const statusEl = document.getElementById('bleStatus');
-  if (!navigator.bluetooth) {
-    statusEl.textContent = 'Ta przeglądarka nie wspiera Web Bluetooth (użyj Chrome/Edge na komputerze lub Androidzie).';
-    return;
-  }
-  try {
-    statusEl.textContent = 'Wybierz urządzenie Omni w oknie przeglądarki...';
-    const device = await navigator.bluetooth.requestDevice({
-      filters: [{ services: [OMNI_SERVICE_UUID] }],
-      optionalServices: [OMNI_SERVICE_UUID],
-    });
-    statusEl.textContent = 'Łączenie...';
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService(OMNI_SERVICE_UUID);
-    omniChar = await service.getCharacteristic(OMNI_CHAR_UUID);
-    await omniChar.startNotifications();
-    omniChar.addEventListener('characteristicvaluechanged', omniHandleNotify);
-    statusEl.textContent = 'Połączono z ' + (device.name || 'Omni') + '.';
-    document.getElementById('bleMeasureBtn').style.display = 'inline-block';
-    device.addEventListener('gattserverdisconnected', function () {
-      statusEl.textContent = 'Rozłączono.';
-      document.getElementById('bleMeasureBtn').style.display = 'none';
-      omniChar = null;
-    });
-  } catch (e) {
-    statusEl.textContent = 'Nie połączono: ' + (e.message || e);
-  }
-});
+document.addEventListener('DOMContentLoaded', function () {
+  const connectBtn = document.getElementById('bleConnectBtn');
+  const measureBtn = document.getElementById('bleMeasureBtn');
+  if (!connectBtn || !measureBtn) return; // viewer role: edit form (and these buttons) isn't rendered
 
-document.getElementById('bleMeasureBtn').addEventListener('click', async function () {
-  const statusEl = document.getElementById('bleStatus');
-  if (!omniChar) { statusEl.textContent = 'Najpierw połącz z urządzeniem.'; return; }
-  try {
-    omniRxBuffer = [];
-    statusEl.textContent = 'Pomiar w toku na urządzeniu...';
-    await omniChar.writeValue(omniBuildFrame(3, 1, [])); // Func 3 Cmd 1 = "Agtron test"
-  } catch (e) {
-    statusEl.textContent = 'Błąd pomiaru: ' + (e.message || e);
-  }
+  connectBtn.addEventListener('click', async function () {
+    const statusEl = document.getElementById('bleStatus');
+    if (!navigator.bluetooth) {
+      statusEl.textContent = 'Ta przeglądarka nie wspiera Web Bluetooth (użyj Chrome/Edge na komputerze lub Androidzie).';
+      return;
+    }
+    try {
+      statusEl.textContent = 'Wybierz urządzenie Omni w oknie przeglądarki...';
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [OMNI_SERVICE_UUID] }],
+        optionalServices: [OMNI_SERVICE_UUID],
+      });
+      statusEl.textContent = 'Łączenie...';
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService(OMNI_SERVICE_UUID);
+      omniChar = await service.getCharacteristic(OMNI_CHAR_UUID);
+      await omniChar.startNotifications();
+      omniChar.addEventListener('characteristicvaluechanged', omniHandleNotify);
+      statusEl.textContent = 'Połączono z ' + (device.name || 'Omni') + '.';
+      measureBtn.style.display = 'inline-block';
+      device.addEventListener('gattserverdisconnected', function () {
+        statusEl.textContent = 'Rozłączono.';
+        measureBtn.style.display = 'none';
+        omniChar = null;
+      });
+    } catch (e) {
+      statusEl.textContent = 'Nie połączono: ' + (e.message || e);
+    }
+  });
+
+  measureBtn.addEventListener('click', async function () {
+    const statusEl = document.getElementById('bleStatus');
+    if (!omniChar) { statusEl.textContent = 'Najpierw połącz z urządzeniem.'; return; }
+    try {
+      omniRxBuffer = [];
+      statusEl.textContent = 'Pomiar w toku na urządzeniu...';
+      await omniChar.writeValue(omniBuildFrame(3, 1, [])); // Func 3 Cmd 1 = "Agtron test"
+    } catch (e) {
+      statusEl.textContent = 'Błąd pomiaru: ' + (e.message || e);
+    }
+  });
 });
 </script>
 {% endblock %}

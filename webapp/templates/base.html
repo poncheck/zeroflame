@@ -102,7 +102,11 @@
     <a href="{{ url_for('roasts_list') }}">Wypały</a>
     <a href="{{ url_for('inventory_list') }}">Magazyn</a>
     {% if session.get('username') %}
-    <span style="margin-left:16px; opacity:0.85;">👤 {{ session.get('display_name') }}</span>
+    <span style="margin-left:16px; opacity:0.85;">👤 {{ session.get('display_name') }} <span class="pill" style="margin-left:4px;">{{ session.get('role') }}</span></span>
+    <a href="{{ url_for('account_password') }}" style="margin-left:10px; font-size:13px;">Zmień hasło</a>
+    {% if session.get('role') == 'admin' %}
+    <a href="{{ url_for('admin_users') }}" style="margin-left:10px; font-size:13px;">Użytkownicy</a>
+    {% endif %}
     <form method="post" action="{{ url_for('logout') }}" style="display:inline; margin-left:10px;">
       <button type="submit" style="background:transparent; border:1px solid rgba(255,255,255,0.5); padding:4px 10px; font-size:12px;">Wyloguj</button>
     </form>

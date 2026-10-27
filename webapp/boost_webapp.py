@@ -25,12 +25,14 @@ from functools import wraps
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from flask import Flask, render_template, request, redirect, url_for, jsonify, abort, session
-from werkzeug.security import check_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.config import DB_PATH, INV_DB_PATH, AUTH_DB_PATH, FLASK_SECRET_KEY  # noqa: E402
 
 WARSAW_TZ = ZoneInfo("Europe/Warsaw")
+
+VALID_ROLES = ("admin", "roaster", "viewer")
 
 app = Flask(__name__)
 
@@ -70,6 +72,22 @@ def login_required(view):
     return wrapped
 
 
+def role_required(*allowed_roles):
+    """Restrict a view to the given roles (server-side enforcement — the
+    UI may also hide controls, but this is the real gate). Viewers get a
+    403 on write endpoints; admin-only views pass a single role."""
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            if not session.get("user_id"):
+                return redirect(url_for("login", next=request.path))
+            if session.get("role") not in allowed_roles:
+                abort(403)
+            return view(*args, **kwargs)
+        return wrapped
+    return decorator
+
+
 @app.before_request
 def require_login_everywhere():
     allowed = {"login", "static"}
@@ -95,6 +113,7 @@ def login():
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             session["display_name"] = user["display_name"] or user["username"]
+            session["role"] = user["role"]
             cur.execute("UPDATE users SET last_login=datetime('now') WHERE id=?", (user["id"],))
             conn.commit()
             conn.close()
@@ -111,6 +130,147 @@ def login():
 def logout():
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/account/password", methods=["GET", "POST"])
+@login_required
+def account_password():
+    error = None
+    success = None
+    if request.method == "POST":
+        current_password = request.form.get("current_password", "")
+        new_password = request.form.get("new_password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        conn = get_auth_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE id=?", (session["user_id"],))
+        user = cur.fetchone()
+        if not user or not check_password_hash(user["password_hash"], current_password):
+            error = "Aktualne hasło jest nieprawidłowe."
+        elif len(new_password) < 8:
+            error = "Nowe hasło musi mieć co najmniej 8 znaków."
+        elif new_password != confirm_password:
+            error = "Nowe hasło i powtórzenie nie są identyczne."
+        else:
+            cur.execute(
+                "UPDATE users SET password_hash=? WHERE id=?",
+                (generate_password_hash(new_password), session["user_id"]),
+            )
+            conn.commit()
+            success = "Hasło zostało zmienione."
+        conn.close()
+    return render_template("account_password.html", error=error, success=success)
+
+
+@app.route("/admin/users")
+@role_required("admin")
+def admin_users():
+    conn = get_auth_conn()
+    users = conn.execute(
+        "SELECT id, username, display_name, role, created_at, last_login FROM users ORDER BY id"
+    ).fetchall()
+    conn.close()
+    return render_template("admin_users.html", users=users, valid_roles=VALID_ROLES)
+
+
+@app.route("/admin/users/create", methods=["POST"])
+@role_required("admin")
+def admin_users_create():
+    username = request.form.get("username", "").strip()
+    password = request.form.get("password", "")
+    role = request.form.get("role", "roaster").strip()
+    error = None
+    if not username or not password:
+        error = "Login i hasło są wymagane."
+    elif role not in VALID_ROLES:
+        error = "Nieprawidłowa rola."
+    elif len(password) < 8:
+        error = "Hasło musi mieć co najmniej 8 znaków."
+    if not error:
+        conn = get_auth_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM users WHERE username=?", (username,))
+        if cur.fetchone():
+            error = f"Użytkownik '{username}' już istnieje."
+        else:
+            cur.execute(
+                "INSERT INTO users (username, password_hash, display_name, is_admin, role) VALUES (?, ?, ?, ?, ?)",
+                (username, generate_password_hash(password), username, 1 if role == "admin" else 0, role),
+            )
+            conn.commit()
+        conn.close()
+    if error:
+        conn = get_auth_conn()
+        users = conn.execute(
+            "SELECT id, username, display_name, role, created_at, last_login FROM users ORDER BY id"
+        ).fetchall()
+        conn.close()
+        return render_template("admin_users.html", users=users, valid_roles=VALID_ROLES, error=error)
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/role", methods=["POST"])
+@role_required("admin")
+def admin_users_set_role(user_id):
+    role = request.form.get("role", "").strip()
+    if role not in VALID_ROLES:
+        abort(400)
+    conn = get_auth_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT username FROM users WHERE id=?", (user_id,))
+    target = cur.fetchone()
+    if not target:
+        conn.close()
+        abort(404)
+    if target["username"] == session.get("username") and role != "admin":
+        # Prevent an admin from locking themselves out by demoting their own account.
+        conn.close()
+        return redirect(url_for("admin_users"))
+    cur.execute(
+        "UPDATE users SET role=?, is_admin=? WHERE id=?",
+        (role, 1 if role == "admin" else 0, user_id),
+    )
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/reset-password", methods=["POST"])
+@role_required("admin")
+def admin_users_reset_password(user_id):
+    new_password = request.form.get("new_password", "")
+    if len(new_password) < 8:
+        return redirect(url_for("admin_users"))
+    conn = get_auth_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM users WHERE id=?", (user_id,))
+    if not cur.fetchone():
+        conn.close()
+        abort(404)
+    cur.execute("UPDATE users SET password_hash=? WHERE id=?", (generate_password_hash(new_password), user_id))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
+@role_required("admin")
+def admin_users_delete(user_id):
+    conn = get_auth_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT username FROM users WHERE id=?", (user_id,))
+    target = cur.fetchone()
+    if not target:
+        conn.close()
+        abort(404)
+    if target["username"] == session.get("username"):
+        # Prevent self-deletion (would orphan the session / possibly leave no admins).
+        conn.close()
+        return redirect(url_for("admin_users"))
+    cur.execute("DELETE FROM users WHERE id=?", (user_id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("admin_users"))
 
 
 def get_conn():
@@ -308,6 +468,7 @@ def _save_roast_manual_fields(conn, prfl_m_cd, whole, ground, weight, notes):
 
 
 @app.route("/api/roast/<prfl_m_cd>/quick-edit", methods=["POST"])
+@role_required("admin", "roaster")
 def roast_quick_edit(prfl_m_cd):
     """Inline quick-edit used from the roasts list popup: save whole/ground color
     and post-roast weight without navigating to the roast detail page."""
@@ -350,6 +511,9 @@ def roast_detail(prfl_m_cd):
     cur = conn.cursor()
 
     if request.method == "POST":
+        if session.get("role") not in ("admin", "roaster"):
+            conn.close()
+            abort(403)
         whole = request.form.get("whole_color", "").strip()
         ground = request.form.get("ground_color", "").strip()
         weight = request.form.get("weight_g", "").strip()
@@ -475,6 +639,7 @@ def inventory_list():
 
 
 @app.route("/inventory/<code>/tags/add", methods=["POST"])
+@role_required("admin", "roaster")
 def inventory_add_tag(code):
     conn = get_inv_conn()
     cur = conn.cursor()
@@ -491,6 +656,7 @@ def inventory_add_tag(code):
 
 
 @app.route("/inventory/<code>/tags/<tag>/delete", methods=["POST"])
+@role_required("admin", "roaster")
 def inventory_delete_tag(code, tag):
     conn = get_inv_conn()
     cur = conn.cursor()
@@ -501,6 +667,7 @@ def inventory_delete_tag(code, tag):
 
 
 @app.route("/inventory/<code>/set-status", methods=["POST"])
+@role_required("admin", "roaster")
 def inventory_set_status(code):
     new_status = request.form.get("status", "").strip()
     if new_status not in ("active", "historical"):
@@ -519,6 +686,7 @@ def inventory_set_status(code):
 
 
 @app.route("/inventory/<code>/edit", methods=["POST"])
+@role_required("admin", "roaster")
 def inventory_edit(code):
     conn = get_inv_conn()
     cur = conn.cursor()
@@ -537,6 +705,7 @@ def inventory_edit(code):
 
 
 @app.route("/inventory/<code>/moisture", methods=["POST"])
+@role_required("admin", "roaster")
 def inventory_add_moisture(code):
     conn = get_inv_conn()
     cur = conn.cursor()
@@ -572,6 +741,7 @@ def inventory_add_moisture(code):
 
 
 @app.route("/inventory/<code>/moisture/<int:reading_id>/delete", methods=["POST"])
+@role_required("admin", "roaster")
 def inventory_delete_moisture(code, reading_id):
     conn = get_inv_conn()
     cur = conn.cursor()

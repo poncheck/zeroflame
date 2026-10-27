@@ -67,6 +67,7 @@
   {% if page < total_pages %}<a href="?q={{ q }}&bean={{ bean }}&sort={{ sort }}&dir={{ direction }}&page={{ page + 1 }}">następna »</a>{% endif %}
 </div>
 
+{% if session.get('role') in ('admin', 'roaster') %}
 <div id="qeditOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:50;"></div>
 <div id="qeditModal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; padding:20px 24px; box-shadow:0 4px 20px rgba(0,0,0,0.25); z-index:51; width:280px;">
   <h3 style="margin:0 0 4px 0; color:var(--brown); font-size:16px;">Szybka edycja</h3>
@@ -179,4 +180,5 @@
   });
 })();
 </script>
+{% endif %}
 {% endblock %}

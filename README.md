@@ -54,7 +54,7 @@ full details on each item):
 - [ ] **Edit bean/lot after roasting** — fix a wrong/missing bean
       assignment from the roast detail page, with inventory
       stock-movement correction.
-- [ ] **User accounts, roles & permissions** — self-service password
+- [x] **User accounts, roles & permissions** — self-service password
       change, admin user-management panel, role-based permissions
       (admin/roaster/viewer).
 - [x] **Responsive design** — make every page usable on phone/tablet
@@ -181,19 +181,24 @@ See [ROADMAP.md](ROADMAP.md) for planned features (cupping module and more).
 
 ## Managing users via CLI (inside Docker)
 
-Until the web-based admin panel exists (see [ROADMAP.md](ROADMAP.md)),
-user accounts are managed with `scripts/manage_users.py`, run inside the
-running container with `docker compose exec`:
+User accounts can be managed either through the in-app admin panel
+(**Użytkownicy** in the nav, visible to `admin` role) or with
+`scripts/manage_users.py`, run inside the running container with
+`docker compose exec` — useful for scripting or if you're locked out of
+the UI:
 
 ```bash
 # Add a new admin account
 docker compose exec zeroflame python3 scripts/manage_users.py create-admin <username> <password>
 
-# Add a regular (non-admin) account
-docker compose exec zeroflame python3 scripts/manage_users.py create-user <username> <password>
+# Add a regular account (defaults to role 'roaster'; pass 'viewer' for read-only)
+docker compose exec zeroflame python3 scripts/manage_users.py create-user <username> <password> [roaster|viewer]
 
 # Change any user's password (e.g. if someone forgot theirs)
 docker compose exec zeroflame python3 scripts/manage_users.py set-password <username> <new_password>
+
+# Change a user's role
+docker compose exec zeroflame python3 scripts/manage_users.py set-role <username> <admin|roaster|viewer>
 
 # List all accounts
 docker compose exec zeroflame python3 scripts/manage_users.py list
@@ -202,6 +207,22 @@ docker compose exec zeroflame python3 scripts/manage_users.py list
 Run these from the directory containing `docker-compose.yml` on the
 server. No restart needed — changes apply immediately (and the running
 container doesn't need to be stopped).
+
+### Roles & permissions
+
+Three roles, enforced server-side (not just hidden in the UI):
+
+- **admin** — everything `roaster` can do, plus the user-management panel
+  (`/admin/users`): create/delete accounts, change roles, reset anyone's
+  password.
+- **roaster** — day-to-day use: edit roast color/weight, manage inventory
+  (tags, status, moisture readings, bean descriptions).
+- **viewer** — read-only. Can browse roasts/inventory/dashboard but all
+  write endpoints return `403`; edit forms render as disabled/hidden.
+
+Every user (any role) can change their own password from **Zmień hasło**
+in the nav (`/account/password`) without admin involvement. An admin
+can't demote or delete their own account (prevents accidental lockout).
 
 
 ## DiFluid Omni Bluetooth integration

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     display_name TEXT,
     is_admin INTEGER DEFAULT 0,
+    role TEXT NOT NULL DEFAULT 'roaster',  -- 'admin' / 'roaster' / 'viewer'
     created_at TEXT DEFAULT (datetime('now')),
     last_login TEXT
 );
@@ -95,6 +96,14 @@ def main():
     auth_conn.commit()
     print(f"auth.db ready at {AUTH_DB_PATH}")
 
+    # Migration: older databases may not have the `role` column yet.
+    existing_cols = {row[1] for row in auth_conn.execute("PRAGMA table_info(users)")}
+    if "role" not in existing_cols:
+        auth_conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'roaster'")
+        auth_conn.execute("UPDATE users SET role = 'admin' WHERE is_admin = 1")
+        auth_conn.commit()
+        print("Migrated auth.db: added 'role' column (existing admins -> role='admin').")
+
     inv_conn = sqlite3.connect(INV_DB_PATH)
     inv_conn.executescript(INVENTORY_SCHEMA)
     inv_conn.commit()
@@ -105,7 +114,7 @@ def main():
     if user_count == 0:
         if ADMIN_USERNAME and ADMIN_PASSWORD:
             auth_conn.execute(
-                "INSERT INTO users (username, password_hash, display_name, is_admin) VALUES (?, ?, ?, 1)",
+                "INSERT INTO users (username, password_hash, display_name, is_admin, role) VALUES (?, ?, ?, 1, 'admin')",
                 (ADMIN_USERNAME, generate_password_hash(ADMIN_PASSWORD), ADMIN_USERNAME),
             )
             auth_conn.commit()

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Zarządzanie użytkownikami — Zeroflame{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('index') }}">« wróć do dashboardu</a>
+
+<div class="card">
+  <h2 style="margin-top:0;">Użytkownicy</h2>
+  {% if error %}<div style="background:#f6e4e4; color:#8a3b3b; padding:8px 10px; border-radius:6px; font-size:13px; margin-bottom:12px;">{{ error }}</div>{% endif %}
+
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Login</th><th>Rola</th><th>Utworzono</th><th>Ostatnie logowanie</th><th>Akcje</th></tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u['display_name'] or u['username'] }}</td>
+        <td>
+          <form method="post" action="{{ url_for('admin_users_set_role', user_id=u['id']) }}" style="display:inline-flex; gap:4px; align-items:center;">
+            <select name="role" onchange="this.form.submit()" {% if u['username'] == session.get('username') %}disabled title="Nie można zmienić własnej roli."{% endif %}>
+              {% for r in valid_roles %}
+              <option value="{{ r }}" {% if r == u['role'] %}selected{% endif %}>{{ r }}</option>
+              {% endfor %}
+            </select>
+          </form>
+        </td>
+        <td>{{ (u['created_at'] or '')[:10] }}</td>
+        <td>{{ (u['last_login'] or '—')[:16] }}</td>
+        <td style="display:flex; gap:6px; flex-wrap:wrap;">
+          <details>
+            <summary style="cursor:pointer; font-size:12px; color:var(--brown);">Reset hasła</summary>
+            <form method="post" action="{{ url_for('admin_users_reset_password', user_id=u['id']) }}" style="margin-top:6px; display:flex; gap:6px;">
+              <input type="password" name="new_password" placeholder="nowe hasło (min 8)" minlength="8" required style="font-size:13px; padding:4px 6px; width:150px;">
+              <button type="submit" style="font-size:12px; padding:4px 8px;">Ustaw</button>
+            </form>
+          </details>
+          {% if u['username'] != session.get('username') %}
+          <form method="post" action="{{ url_for('admin_users_delete', user_id=u['id']) }}" onsubmit="return confirm('Usunąć użytkownika {{ u['username'] }}?');">
+            <button type="submit" style="font-size:12px; padding:4px 8px; background:#b5504a;">Usuń</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="card manual-form" style="max-width:420px;">
+  <h3 style="margin-top:0;">Dodaj użytkownika</h3>
+  <form method="post" action="{{ url_for('admin_users_create') }}">
+    <label>Login
+      <input type="text" name="username" required>
+    </label>
+    <label>Hasło (min. 8 znaków)
+      <input type="password" name="password" minlength="8" required>
+    </label>
+    <label>Rola
+      <select name="role">
+        <option value="roaster" selected>roaster — codzienna praca (wypały, magazyn)</option>
+        <option value="viewer">viewer — tylko podgląd</option>
+        <option value="admin">admin — pełny dostęp + zarządzanie userami</option>
+      </select>
+    </label>
+    <div style="margin-top:14px;"><button type="submit">Dodaj</button></div>
+  </form>
+</div>
+{% endblock %}

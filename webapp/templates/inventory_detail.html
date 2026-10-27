@@ -13,27 +13,34 @@
     <dt>Odmiana</dt><dd>{{ bean['variety'] or '—' }}</dd>
     <dt>Obróbka</dt><dd>{{ bean['processing'] or '—' }}</dd>
     <dt>Tagi</dt><dd>
+      {% set can_edit = session.get('role') in ('admin', 'roaster') %}
       {% for t in tags %}
       <span class="pill" style="margin-right:4px;">#{{ t }}
+        {% if can_edit %}
         <form method="post" action="{{ url_for('inventory_delete_tag', code=bean['code'], tag=t) }}" style="display:inline;">
           <button type="submit" style="font-size:10px; padding:1px 5px; margin-left:4px; background:#b5504a;" onclick="return confirm('Usunąć tag #{{ t }}?');">×</button>
         </form>
+        {% endif %}
       </span>
       {% else %}—{% endfor %}
+      {% if can_edit %}
       <form method="post" action="{{ url_for('inventory_add_tag', code=bean['code']) }}" style="display:inline-block; margin-left:8px;">
         <input type="text" name="tag" placeholder="np. TYPICA" style="width:120px; font-size:13px; padding:3px 6px;">
         <button type="submit" style="font-size:12px; padding:3px 8px;">+ dodaj tag</button>
       </form>
+      {% endif %}
     </dd>
     <dt>Status</dt><dd>
       {% if bean['status']=='active' %}<span class="pill ok">aktywne w Boost</span>
       {% else %}<span class="pill">historyczne</span>{% endif %}
+      {% if can_edit %}
       <form method="post" action="{{ url_for('inventory_set_status', code=bean['code']) }}" style="display:inline; margin-left:10px;">
         <input type="hidden" name="status" value="{{ 'historical' if bean['status']=='active' else 'active' }}">
         <button type="submit">
           {% if bean['status']=='active' %}Oznacz jako historyczne{% else %}Oznacz jako aktywne{% endif %}
         </button>
       </form>
+      {% endif %}
     </dd>
     <dt>Kod Boost</dt><dd>{{ bean['boost_bean_cd'] or '—' }}</dd>
     <dt>Aktualny stan (Boost)</dt><dd>{{ bean['current_stock_kg'] if bean['current_stock_kg'] is not none else '—' }} kg</dd>
@@ -44,7 +51,7 @@
     <dt>Uwagi</dt><dd>{{ bean['source_note'] or '—' }}</dd>
   </dl>
 
-  <details style="margin-top:14px;">
+  <details style="margin-top:14px;" {% if not can_edit %}hidden{% endif %}>
     <summary style="cursor:pointer; color:var(--brown); font-weight:600;">Edytuj opis ziarna</summary>
     <form method="post" action="{{ url_for('inventory_edit', code=bean['code']) }}" class="manual-form" style="margin-top:10px;">
       <label>Pełna nazwa
@@ -75,6 +82,7 @@
 
 <div class="card manual-form">
   <h3 style="margin-top:0;">Statystyki ziarna (wilgotność / gęstość / temperatura)</h3>
+  {% if can_edit %}
   <form method="post" action="{{ url_for('inventory_add_moisture', code=bean['code']) }}">
     <label>Wilgotność (%)
       <input type="number" step="0.1" min="0" max="100" name="moisture_pct">
@@ -93,6 +101,7 @@
     </label>
     <div style="margin-top:12px;"><button type="submit">Dodaj odczyt</button></div>
   </form>
+  {% endif %}
 
   {% if moisture_readings %}
   <div class="table-wrap">
@@ -109,9 +118,11 @@
         <td>{{ mr['bean_temp_c'] if mr['bean_temp_c'] is not none else '—' }}</td>
         <td>{{ mr['notes'] or '—' }}</td>
         <td>
+          {% if can_edit %}
           <form method="post" action="{{ url_for('inventory_delete_moisture', code=bean['code'], reading_id=mr['id']) }}" style="display:inline;">
             <button type="submit" style="font-size:12px; padding:4px 8px; background:#b5504a;" onclick="return confirm('Usunąć ten odczyt?');">Usuń</button>
           </form>
+          {% else %}—{% endif %}
         </td>
       </tr>
       {% endfor %}
