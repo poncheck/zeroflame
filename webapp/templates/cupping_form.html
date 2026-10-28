@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% block title %}{% if cupping_session %}Edytuj sesję cuppingu{% else %}Nowa sesja cuppingu{% endif %} — Zeroflame{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('cupping_list') }}">« wróć do listy cuppingów</a>
+
+<h2>{% if cupping_session %}Edytuj sesję cuppingu #{{ cupping_session['id'] }}{% else %}Nowa sesja cuppingu{% endif %}</h2>
+<p style="color:#776a5a; font-size:14px;">Dodaj kilka kaw naraz, aby łatwo je porównać. Każda kawa to osobna karta poniżej.</p>
+
+{% if error %}
+<div class="card" style="background:#f6e4e4; color:#8a3b3b;">{{ error }}</div>
+{% endif %}
+
+<form method="post" id="cuppingSessionForm">
+  <div class="card manual-form">
+    <h3 style="margin-top:0;">Sesja</h3>
+    <label for="session_label">Etykieta sesji (opcjonalnie, np. "degustacja 2026-10-27")</label>
+    <input type="text" name="session_label" id="session_label" value="{{ (cupping_session['session_label'] if cupping_session else None) or '' }}">
+    <label for="session_notes" style="margin-top:10px;">Ogólne notatki sesji</label>
+    <textarea name="session_notes" id="session_notes" rows="2" style="width:100%; padding:6px 10px; border:1px solid #d8cbb9; border-radius:6px; margin-top:2px; font-family:inherit;">{{ (cupping_session['notes'] if cupping_session else None) or '' }}</textarea>
+  </div>
+
+  <input type="hidden" name="item_count" id="item_count" value="0">
+  <div id="itemsContainer"></div>
+
+  <div style="margin:14px 0;">
+    <button type="button" id="addItemBtn">+ Dodaj kolejną kawę</button>
+  </div>
+
+  <div style="margin-top:18px;">
+    <button type="submit">{% if cupping_session %}Zapisz zmiany{% else %}Zapisz sesję cuppingu{% endif %}</button>
+  </div>
+</form>
+
+<script id="itemTemplate" type="text/template">
+<div class="card manual-form cupping-item" data-idx="__IDX__" style="position:relative;">
+  <button type="button" class="remove-item-btn" style="position:absolute; top:12px; right:12px; background:#b5504a; font-size:12px; padding:4px 8px;">× usuń</button>
+  <h3 style="margin-top:0;">Kawa #__NUM__</h3>
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+    <div>
+      <label>Kod kawy (ziarno) *</label>
+      <select name="item__IDX___bean_code" class="bean-select" required>
+        <option value="">— wybierz —</option>
+        {% for b in beans %}
+        <option value="{{ b['code'] }}">{{ b['code'] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Konkretny wypał (opcjonalnie)</label>
+      <select name="item__IDX___roast_prfl_m_cd" class="roast-select">
+        <option value="">— bez przypisania do wypału —</option>
+      </select>
+    </div>
+  </div>
+
+  <hr style="margin:18px 0; border:none; border-top:1px solid #eee;">
+  <h4 style="margin-top:0;">Aromat</h4>
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+    <div>
+      <label>Intensywność</label>
+      {% for opt in aroma_intensity_opts %}
+      <label style="display:inline-flex; align-items:center; gap:4px; margin-right:12px; font-weight:400;">
+        <input type="radio" name="item__IDX___aroma_intensity" value="{{ opt }}"> {{ opt }}
+      </label>
+      {% endfor %}
+    </div>
+    <div>
+      <label>Grupy aromatów</label>
+      {% for opt in flavour_groups_opts %}
+      <label style="display:inline-flex; align-items:center; gap:4px; margin-right:10px; font-weight:400;">
+        <input type="checkbox" name="item__IDX___aroma_groups" value="{{ opt }}"> {{ opt }}
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <hr style="margin:18px 0; border:none; border-top:1px solid #eee;">
+  <h4 style="margin-top:0;">Smak podstawowy / Flavour</h4>
+  <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
+    <div>
+      <label>Kwaśny (0-5)</label>
+      <input type="number" step="0.5" min="0" max="5" name="item__IDX___sour_intensity">
+    </div>
+    <div>
+      <label>Gorzki (0-5)</label>
+      <input type="number" step="0.5" min="0" max="5" name="item__IDX___bitter_intensity">
+    </div>
+    <div>
+      <label>Słodki (0-5)</label>
+      <input type="number" step="0.5" min="0" max="5" name="item__IDX___sweet_intensity">
+    </div>
+    <div>
+      <label>Słony (0-5)</label>
+      <input type="number" step="0.5" min="0" max="5" name="item__IDX___salty_intensity">
+    </div>
+  </div>
+  <label style="margin-top:12px;">Grupy flavour</label>
+  {% for opt in flavour_groups_opts %}
+  <label style="display:inline-flex; align-items:center; gap:4px; margin-right:10px; font-weight:400;">
+    <input type="checkbox" name="item__IDX___flavour_groups" value="{{ opt }}"> {{ opt }}
+  </label>
+  {% endfor %}
+
+  <hr style="margin:18px 0; border:none; border-top:1px solid #eee;">
+  <h4 style="margin-top:0;">Posmak</h4>
+  <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+    <div>
+      <label>Długość</label>
+      {% for opt in aftertaste_length_opts %}
+      <label style="display:inline-flex; align-items:center; gap:4px; margin-right:12px; font-weight:400;">
+        <input type="radio" name="item__IDX___aftertaste_length" value="{{ opt }}"> {{ opt }}
+      </label>
+      {% endfor %}
+    </div>
+    <div>
+      <label>Rodzaj posmaku</label>
+      {% for opt in aftertaste_type_opts %}
+      <label style="display:inline-flex; align-items:center; gap:4px; margin-right:12px; font-weight:400;">
+        <input type="radio" name="item__IDX___aftertaste_type" value="{{ opt }}"> {{ opt }}
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  <label style="margin-top:12px;">Odczucia dotykowe</label>
+  {% for opt in mouthfeel_opts %}
+  <label style="display:inline-flex; align-items:center; gap:4px; margin-right:10px; font-weight:400;">
+    <input type="checkbox" name="item__IDX___mouthfeel" value="{{ opt }}"> {{ opt }}
+  </label>
+  {% endfor %}
+
+  <hr style="margin:18px 0; border:none; border-top:1px solid #eee;">
+  <h4 style="margin-top:0;">Tekstura</h4>
+  <label>Body</label>
+  {% for opt in body_opts %}
+  <label style="display:inline-flex; align-items:center; gap:4px; margin-right:12px; font-weight:400;">
+    <input type="radio" name="item__IDX___body" value="{{ opt }}"> {{ opt }}
+  </label>
+  {% endfor %}
+  <label style="margin-top:12px;">Tekstura</label>
+  {% for opt in texture_opts %}
+  <label style="display:inline-flex; align-items:center; gap:4px; margin-right:10px; font-weight:400;">
+    <input type="checkbox" name="item__IDX___texture" value="{{ opt }}"> {{ opt }}
+  </label>
+  {% endfor %}
+
+  <hr style="margin:18px 0; border:none; border-top:1px solid #eee;">
+  <label>Notatki (ta kawa)</label>
+  <textarea name="item__IDX___notes" rows="2" style="width:100%; padding:6px 10px; border:1px solid #d8cbb9; border-radius:6px; margin-top:2px; font-family:inherit;"></textarea>
+</div>
+</script>
+
+<script>
+const EXISTING_ITEMS = {{ (items or []) | tojson }};
+const PRESELECTED_BEAN = {{ (preselected_bean or '') | tojson }};
+const PRESELECTED_ROAST = {{ (preselected_roast or '') | tojson }};
+
+let itemIdx = 0;
+const container = document.getElementById('itemsContainer');
+const template = document.getElementById('itemTemplate').textContent;
+
+async function loadRoastsForBeanSelect(beanSelect, roastSelect, keepSelection) {
+  const code = beanSelect.value;
+  roastSelect.innerHTML = '<option value="">— bez przypisania do wypału —</option>';
+  if (!code) return;
+  try {
+    const resp = await fetch('/api/roasts-for-bean/' + encodeURIComponent(code));
+    if (!resp.ok) return;
+    const roasts = await resp.json();
+    roasts.forEach(function (r) {
+      const opt = document.createElement('option');
+      opt.value = r.prfl_m_cd;
+      const dateStr = r.rst_dt_iso ? r.rst_dt_iso.slice(0, 16).replace('T', ' ') : '';
+      opt.textContent = r.prfl_name + (dateStr ? ' — ' + dateStr : '');
+      if (keepSelection && r.prfl_m_cd === keepSelection) opt.selected = true;
+      roastSelect.appendChild(opt);
+    });
+  } catch (e) { /* network hiccup — leave the "no roast" fallback in place */ }
+}
+
+function addItem(prefill) {
+  prefill = prefill || {};
+  const idx = itemIdx++;
+  const html = template
+    .split('__IDX__').join(idx)
+    .split('__NUM__').join(idx + 1);
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = html;
+  const card = wrapper.firstElementChild;
+  container.appendChild(card);
+  document.getElementById('item_count').value = itemIdx;
+
+  const beanSelect = card.querySelector('.bean-select');
+  const roastSelect = card.querySelector('.roast-select');
+
+  if (prefill.bean_code) {
+    beanSelect.value = prefill.bean_code;
+    if (beanSelect.value !== prefill.bean_code) {
+      // Bean not in the inventory dropdown (e.g. roast's green bean isn't tracked
+      // in /inventory) — add it on the fly so the selection isn't silently lost.
+      const opt = document.createElement('option');
+      opt.value = prefill.bean_code;
+      opt.textContent = prefill.bean_code;
+      beanSelect.appendChild(opt);
+      beanSelect.value = prefill.bean_code;
+    }
+  }
+  beanSelect.addEventListener('change', function () {
+    loadRoastsForBeanSelect(beanSelect, roastSelect, null);
+  });
+  if (beanSelect.value) {
+    loadRoastsForBeanSelect(beanSelect, roastSelect, prefill.roast_prfl_m_cd || null);
+  }
+
+  // Pre-fill radios/checkboxes/number/text fields from an existing item (edit mode).
+  if (prefill.aroma_intensity) setRadio(card, 'aroma_intensity', prefill.aroma_intensity);
+  setChecks(card, 'aroma_groups', prefill.aroma_groups);
+  setNum(card, 'sour_intensity', prefill.sour_intensity);
+  setNum(card, 'bitter_intensity', prefill.bitter_intensity);
+  setNum(card, 'sweet_intensity', prefill.sweet_intensity);
+  setNum(card, 'salty_intensity', prefill.salty_intensity);
+  setChecks(card, 'flavour_groups', prefill.flavour_groups);
+  if (prefill.aftertaste_length) setRadio(card, 'aftertaste_length', prefill.aftertaste_length);
+  if (prefill.aftertaste_type) setRadio(card, 'aftertaste_type', prefill.aftertaste_type);
+  setChecks(card, 'mouthfeel', prefill.mouthfeel);
+  if (prefill.body) setRadio(card, 'body', prefill.body);
+  setChecks(card, 'texture', prefill.texture);
+  if (prefill.notes) {
+    const notesEl = card.querySelector('textarea[name$="_notes"]');
+    if (notesEl) notesEl.value = prefill.notes;
+  }
+
+  card.querySelector('.remove-item-btn').addEventListener('click', function () {
+    card.remove();
+    renumberItems();
+  });
+
+  renumberItems();
+}
+
+function setRadio(card, field, value) {
+  const el = card.querySelector('input[name$="_' + field + '"][value="' + cssEscape(value) + '"]');
+  if (el) el.checked = true;
+}
+function setChecks(card, field, commaSeparated) {
+  if (!commaSeparated) return;
+  commaSeparated.split(',').map(s => s.trim()).filter(Boolean).forEach(function (v) {
+    const el = card.querySelector('input[name$="_' + field + '"][value="' + cssEscape(v) + '"]');
+    if (el) el.checked = true;
+  });
+}
+function setNum(card, field, value) {
+  if (value === null || value === undefined) return;
+  const el = card.querySelector('input[name$="_' + field + '"]');
+  if (el) el.value = value;
+}
+function cssEscape(v) {
+  return String(v).replace(/(["\\])/g, '\\$1');
+}
+
+function renumberItems() {
+  const cards = container.querySelectorAll('.cupping-item');
+  cards.forEach(function (card, i) {
+    const h = card.querySelector('h3');
+    if (h) h.textContent = 'Kawa #' + (i + 1);
+  });
+}
+
+document.getElementById('addItemBtn').addEventListener('click', function () {
+  addItem({});
+});
+
+document.addEventListener('DOMContentLoaded', function () {
+  if (EXISTING_ITEMS && EXISTING_ITEMS.length) {
+    EXISTING_ITEMS.forEach(function (item) { addItem(item); });
+  } else {
+    // Fresh session: start with one item, pre-filled from query params if present
+    // (e.g. "+ Nowy cupping" clicked from a bean or roast page).
+    addItem({ bean_code: PRESELECTED_BEAN, roast_prfl_m_cd: PRESELECTED_ROAST });
+  }
+});
+
+document.getElementById('cuppingSessionForm').addEventListener('submit', function () {
+  document.getElementById('item_count').value = itemIdx;
+});
+</script>
+{% endblock %}

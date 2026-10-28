@@ -17,6 +17,9 @@ __pycache__/
 venv/
 *.egg-info/
 
+# --- Local dev overrides (per-machine, not shared) ---
+docker-compose.override.yml
+
 # --- OS / editor cruft ---
 .DS_Store
 *.swp

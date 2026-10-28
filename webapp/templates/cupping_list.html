@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Cuppingi — Zeroflame{% endblock %}
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+  <h2 style="margin:0;">Cuppingi</h2>
+  {% if session.get('role') in ('admin', 'roaster') %}
+  <a href="{{ url_for('cupping_new') }}"><button type="button">+ Nowa sesja cuppingu</button></a>
+  {% endif %}
+</div>
+
+<form class="filters" method="get">
+  <select name="bean" onchange="this.form.submit()">
+    <option value="">Wszystkie ziarna</option>
+    {% for code in bean_codes %}
+    <option value="{{ code }}" {% if code == bean_filter %}selected{% endif %}>{{ code }}</option>
+    {% endfor %}
+  </select>
+  {% if bean_filter %}
+  <a href="{{ url_for('cupping_list') }}" style="align-self:center; font-size:13px;">× wyczyść filtr</a>
+  {% endif %}
+</form>
+
+{% if not sessions %}
+<p>Brak zapisanych cuppingów{% if bean_filter %} dla ziarna <strong>{{ bean_filter }}</strong>{% endif %}.</p>
+{% else %}
+{% for s in sessions %}
+{% set s_items = items_by_session.get(s['id'], []) %}
+<div class="card" style="margin-bottom:14px;">
+  <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;">
+    <h3 style="margin:0;">
+      <a class="row-link" href="{{ url_for('cupping_session_detail', session_id=s['id']) }}">
+        {{ s['session_label'] or ('Sesja #' ~ s['id']) }}
+      </a>
+    </h3>
+    <span style="font-size:13px; color:#776a5a;">
+      {{ s['cupped_at'][:16].replace('T', ' ') if s['cupped_at'] else '—' }} · {{ s['cupper'] or '—' }} · {{ s_items|length }} {% if s_items|length == 1 %}kawa{% else %}kaw{% endif %}
+    </span>
+  </div>
+  <div class="table-wrap" style="margin-top:10px;">
+  <table class="sortable">
+    <thead>
+      <tr>
+        <th>Kod kawy</th>
+        <th>Wypał</th>
+        <th>Aromat</th>
+        <th>Flavour</th>
+        <th>Posmak</th>
+        <th>Body</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in s_items %}
+      <tr>
+        <td><a href="{{ url_for('cupping_list', bean=c['bean_code']) }}">{{ c['bean_code'] }}</a></td>
+        <td>
+          {% if c['roast_prfl_m_cd'] %}
+          <a href="{{ url_for('roast_detail', prfl_m_cd=c['roast_prfl_m_cd']) }}">wypał ↗</a>
+          {% else %}
+          <span class="pill missing">brak</span>
+          {% endif %}
+        </td>
+        <td>{{ c['aroma_intensity'] or '—' }}{% if c['aroma_groups'] %} · {{ c['aroma_groups'] }}{% endif %}</td>
+        <td>{{ c['flavour_groups'] or '—' }}</td>
+        <td>{{ c['aftertaste_type'] or '—' }}{% if c['aftertaste_length'] %} ({{ c['aftertaste_length'] }}){% endif %}</td>
+        <td>{{ c['body'] or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

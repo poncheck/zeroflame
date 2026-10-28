@@ -160,4 +160,33 @@
 </tbody>
 </table>
 </div>
+
+<div class="card" style="margin-top:16px;">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+    <h3 style="margin:0;">Cuppingi tego ziarna</h3>
+    {% if session.get('role') in ('admin', 'roaster') %}
+    <a href="{{ url_for('cupping_new', bean_code=bean['code']) }}"><button type="button">+ Nowy cupping</button></a>
+    {% endif %}
+  </div>
+  {% if bean_cuppings %}
+  <div class="table-wrap" style="margin-top:10px;">
+  <table class="sortable">
+    <thead><tr><th>Data</th><th>Wypał</th><th>Aromat</th><th>Flavour</th><th>Body</th></tr></thead>
+    <tbody>
+      {% for c in bean_cuppings %}
+      <tr>
+        <td><a class="row-link" href="{{ url_for('cupping_session_detail', session_id=c['session_id']) }}">{{ c['cupped_at'][:16] if c['cupped_at'] else '—' }}</a></td>
+        <td>{% if c['roast_prfl_m_cd'] %}<a href="{{ url_for('roast_detail', prfl_m_cd=c['roast_prfl_m_cd']) }}">wypał ↗</a>{% else %}—{% endif %}</td>
+        <td>{{ c['aroma_intensity'] or '—' }}</td>
+        <td>{{ c['flavour_groups'] or '—' }}</td>
+        <td>{{ c['body'] or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p style="margin-top:10px; color:#776a5a;">Brak jeszcze cuppingów dla tego ziarna.</p>
+  {% endif %}
+</div>
 {% endblock %}

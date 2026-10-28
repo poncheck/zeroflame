@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Cupping — {{ cupping_session['session_label'] or ('#' ~ cupping_session['id']) }} — Zeroflame{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('cupping_list') }}">« wróć do listy cuppingów</a>
+
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+  <h2 style="margin:0;">{{ cupping_session['session_label'] or ('Sesja cuppingu #' ~ cupping_session['id']) }}</h2>
+  {% if session.get('role') in ('admin', 'roaster') %}
+  <div>
+    <a href="{{ url_for('cupping_session_edit', session_id=cupping_session['id']) }}"><button type="button">Edytuj</button></a>
+    <form method="post" action="{{ url_for('cupping_session_delete', session_id=cupping_session['id']) }}" style="display:inline;" onsubmit="return confirm('Usunąć całą sesję cuppingu wraz z wszystkimi kawami?');">
+      <button type="submit" style="background:#b5504a;">Usuń sesję</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+<p style="color:#776a5a; font-size:13px;">
+  {{ cupping_session['cupped_at'][:16].replace('T', ' ') if cupping_session['cupped_at'] else '—' }} · {{ cupping_session['cupper'] or '—' }} · {{ items|length }} {% if items|length == 1 %}kawa{% else %}kaw{% endif %}
+</p>
+{% if cupping_session['notes'] %}
+<div class="card"><p style="white-space:pre-wrap; margin:0;">{{ cupping_session['notes'] }}</p></div>
+{% endif %}
+
+{% if not items %}
+<p>Ta sesja nie ma jeszcze żadnej kawy.</p>
+{% else %}
+<div class="table-wrap">
+<table class="sortable">
+  <thead>
+    <tr>
+      <th>Cecha</th>
+      {% for item in items %}
+      <th>
+        <a href="{{ url_for('inventory_detail', code=item['bean_code']) }}">{{ item['bean_code'] }}</a>
+        {% if item['roast_prfl_m_cd'] %}
+        <br><a href="{{ url_for('roast_detail', prfl_m_cd=item['roast_prfl_m_cd']) }}" style="font-size:12px;">
+          {{ roasts_by_cd.get(item['roast_prfl_m_cd'], {}).get('prfl_name', 'wypał ↗') }}
+        </a>
+        {% else %}
+        <br><span class="pill missing">bez przypisania</span>
+        {% endif %}
+        {% if session.get('role') in ('admin', 'roaster') %}
+        <form method="post" action="{{ url_for('cupping_item_delete', session_id=cupping_session['id'], item_id=item['id']) }}" style="display:inline;" onsubmit="return confirm('Usunąć tę kawę z sesji?');">
+          <button type="submit" style="background:#b5504a; font-size:11px; padding:2px 6px; margin-top:4px;">× usuń kawę</button>
+        </form>
+        {% endif %}
+      </th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td><strong>Aromat — intensywność</strong></td>
+      {% for item in items %}<td>{{ item['aroma_intensity'] or '—' }}</td>{% endfor %}
+    </tr>
+    <tr><td><strong>Aromat — grupy</strong></td>
+      {% for item in items %}<td>{{ item['aroma_groups'] or '—' }}</td>{% endfor %}
+    </tr>
+    <tr><td><strong>Kwaśny (0-5)</strong></td>
+      {% for item in items %}<td>{{ item['sour_intensity'] if item['sour_intensity'] is not none else '—' }}</td>{% endfor %}
+    </tr>
+    <tr><td><strong>Gorzki (0-5)</strong></td>
+      {% for item in items %}<td>{{ item['bitter_intensity'] if item['bitter_intensity'] is not none else '—' }}</td>{% endfor %}
+    </tr>
+    <tr><td><strong>Słodki (0-5)</strong></td>
+      {% for item in items %}<td>{{ item['sweet_intensity'] if item['sweet_intensity'] is not none else '—' }}</td>{% endfor %}
+    </tr>
+    <tr><td><strong>Słony (0-5)</strong></td>
+      {% for item in items %}<td>{{ item['salty_intensity'] if item['salty_intensity'] is not none else '—' }}</td>{% endfor %}
+    </tr>
+    <tr><td><strong>Flavour — grupy</strong></td>
+      {% for item in items %}<td>{{ item['flavour_groups'] or '—' }}</td>{% endfor %}
+    </tr>
+    <tr><td><strong>Posmak — długość</strong></td>
+      {% for item in items %}<td>{{ item['aftertaste_length'] or '—' }}</td>{% endfor %}
+    </tr>
+    <tr><td><strong>Posmak — rodzaj</strong></td>
+      {% for item in items %}<td>{{ item['aftertaste_type'] or '—' }}</td>{% endfor %}
+    </tr>
+    <tr><td><strong>Odczucia dotykowe</strong></td>
+      {% for item in items %}<td>{{ item['mouthfeel'] or '—' }}</td>{% endfor %}
+    </tr>
+    <tr><td><strong>Body</strong></td>
+      {% for item in items %}<td>{{ item['body'] or '—' }}</td>{% endfor %}
+    </tr>
+    <tr><td><strong>Tekstura</strong></td>
+      {% for item in items %}<td>{{ item['texture'] or '—' }}</td>{% endfor %}
+    </tr>
+    <tr><td><strong>Notatki</strong></td>
+      {% for item in items %}<td style="white-space:pre-wrap;">{{ item['notes'] or '—' }}</td>{% endfor %}
+    </tr>
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

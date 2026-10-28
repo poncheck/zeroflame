@@ -34,6 +34,20 @@ WARSAW_TZ = ZoneInfo("Europe/Warsaw")
 
 VALID_ROLES = ("admin", "roaster", "viewer")
 
+# Fixed vocabulary lifted from the cupping/brewing sensory sheet (arkusz
+# brewing intermediate.pdf) — same group list reused for both aroma and
+# flavour, per the sheet.
+CUPPING_FLAVOUR_GROUPS = [
+    "kwiaty", "owoce", "warzywa", "chemiczne", "palone",
+    "przyprawy", "czekolada", "orzechy", "słodkie",
+]
+CUPPING_AROMA_INTENSITY = ["wysoka", "średnia", "niska"]
+CUPPING_MOUTHFEEL = ["gładki", "cierpki", "pylisty", "wysuszający"]
+CUPPING_TEXTURE = ["gładka", "jedwabista", "musująca", "szorstka", "pylista", "cierpka", "ostra"]
+CUPPING_AFTERTASTE_LENGTH = ["długi", "średni", "krótki"]
+CUPPING_AFTERTASTE_TYPE = ["słodki", "gorzki", "kwaśny"]
+CUPPING_BODY = ["wysokie", "średnie", "niskie", "krągłe", "traci krągłość"]
+
 app = Flask(__name__)
 
 
@@ -95,6 +109,24 @@ def require_login_everywhere():
         return None
     if not session.get("user_id"):
         return redirect(url_for("login", next=request.path))
+    # Self-healing: refresh role/display_name from the DB on every request.
+    # Covers (a) a session cookie issued before the 'role' column/session
+    # key existed, (b) an admin changing someone's role while they're
+    # still logged in -- without this, role_required() would keep reading
+    # a stale/missing value from the signed cookie until the user logs
+    # out and back in, which looks like an inexplicable 403.
+    conn = get_auth_conn()
+    row = conn.execute(
+        "SELECT username, display_name, role FROM users WHERE id=?", (session["user_id"],)
+    ).fetchone()
+    conn.close()
+    if not row:
+        # Account was deleted while the session was still active.
+        session.clear()
+        return redirect(url_for("login", next=request.path))
+    session["username"] = row["username"]
+    session["display_name"] = row["display_name"] or row["username"]
+    session["role"] = row["role"]
     return None
 
 
@@ -553,12 +585,17 @@ def roast_detail(prfl_m_cd):
         loss_pct = round((1 - weight_row["weight_kg"] / roast["grn_bean_amt"]) * 100, 2)
 
     bean_in_inventory = False
+    inv_conn = get_inv_conn()
     if roast["bean_name"]:
-        inv_conn = get_inv_conn()
         bean_in_inventory = inv_conn.execute(
             "SELECT 1 FROM beans WHERE code=?", (roast["bean_name"],)
         ).fetchone() is not None
-        inv_conn.close()
+    roast_cuppings = inv_conn.execute(
+        """SELECT i.*, s.cupped_at, s.session_label, s.cupper FROM cupping_items i
+           JOIN cupping_sessions s ON s.id = i.session_id
+           WHERE i.roast_prfl_m_cd=? ORDER BY s.cupped_at DESC""", (prfl_m_cd,)
+    ).fetchall()
+    inv_conn.close()
 
     conn.close()
     return render_template(
@@ -566,6 +603,7 @@ def roast_detail(prfl_m_cd):
         weight_row=weight_row, loss_pct=loss_pct,
         rst_mod_labels=RST_MOD_LABELS, rst_lvl_labels=RST_LVL_LABELS,
         original_profile_cd=original_profile_cd, bean_in_inventory=bean_in_inventory,
+        roast_cuppings=roast_cuppings,
     )
 
 
@@ -775,12 +813,336 @@ def inventory_detail(code):
 
     cur.execute("SELECT tag FROM bean_tags WHERE bean_code=? ORDER BY tag", (code,))
     tags = [row["tag"] for row in cur.fetchall()]
+
+    cur.execute("""
+        SELECT i.*, s.cupped_at, s.session_label FROM cupping_items i
+        JOIN cupping_sessions s ON s.id = i.session_id
+        WHERE i.bean_code=? ORDER BY s.cupped_at DESC
+    """, (code,))
+    bean_cuppings = cur.fetchall()
+
     conn.close()
 
     return render_template(
         "inventory_detail.html", bean=bean, movements=movements,
-        moisture_readings=moisture_readings, tags=tags,
+        moisture_readings=moisture_readings, tags=tags, bean_cuppings=bean_cuppings,
     )
+
+
+def _cupping_checkbox_list(field_prefix, idx, field_name):
+    """Join multiple selected checkbox values for item `idx` in a multi-item form."""
+    key = f"{field_prefix}{idx}_{field_name}"
+    values = [v.strip() for v in request.form.getlist(key) if v.strip()]
+    return ", ".join(values) if values else None
+
+
+def _save_cupping_session_from_form(conn, session_id=None):
+    """Insert or update a cupping_sessions row + its cupping_items from request.form.
+
+    Items are submitted as item0_*, item1_*, ... (count given by 'item_count').
+    Returns the session id.
+    """
+    session_label = request.form.get("session_label", "").strip() or None
+    overall_notes = request.form.get("session_notes", "").strip() or None
+    cupper = session.get("username")
+
+    if session_id is None:
+        cur = conn.execute(
+            "INSERT INTO cupping_sessions (session_label, cupper, notes) VALUES (?, ?, ?)",
+            (session_label, cupper, overall_notes),
+        )
+        conn.commit()
+        session_id = cur.lastrowid
+    else:
+        conn.execute(
+            "UPDATE cupping_sessions SET session_label=?, notes=? WHERE id=?",
+            (session_label, overall_notes, session_id),
+        )
+        conn.execute("DELETE FROM cupping_items WHERE session_id=?", (session_id,))
+        conn.commit()
+
+    def _to_float(name):
+        raw = request.form.get(name, "").strip()
+        if not raw:
+            return None
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+
+    item_count = int(request.form.get("item_count", "0") or "0")
+    saved_items = 0
+    for idx in range(item_count):
+        prefix = f"item{idx}_"
+        bean_code = request.form.get(f"{prefix}bean_code", "").strip()
+        if not bean_code:
+            continue  # a blank/removed item slot — skip it
+        roast_prfl_m_cd = request.form.get(f"{prefix}roast_prfl_m_cd", "").strip() or None
+
+        aroma_intensity = request.form.get(f"{prefix}aroma_intensity", "").strip() or None
+        aroma_groups = _cupping_checkbox_list("item", idx, "aroma_groups")
+
+        sour_intensity = _to_float(f"{prefix}sour_intensity")
+        bitter_intensity = _to_float(f"{prefix}bitter_intensity")
+        sweet_intensity = _to_float(f"{prefix}sweet_intensity")
+        salty_intensity = _to_float(f"{prefix}salty_intensity")
+        flavour_groups = _cupping_checkbox_list("item", idx, "flavour_groups")
+
+        aftertaste_length = request.form.get(f"{prefix}aftertaste_length", "").strip() or None
+        aftertaste_type = request.form.get(f"{prefix}aftertaste_type", "").strip() or None
+        mouthfeel = _cupping_checkbox_list("item", idx, "mouthfeel")
+
+        body = request.form.get(f"{prefix}body", "").strip() or None
+        texture = _cupping_checkbox_list("item", idx, "texture")
+
+        notes = request.form.get(f"{prefix}notes", "").strip() or None
+
+        conn.execute(
+            """INSERT INTO cupping_items (
+                session_id, bean_code, roast_prfl_m_cd,
+                aroma_intensity, aroma_groups,
+                sour_intensity, bitter_intensity, sweet_intensity, salty_intensity, flavour_groups,
+                aftertaste_length, aftertaste_type, mouthfeel,
+                body, texture, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (session_id, bean_code, roast_prfl_m_cd,
+             aroma_intensity, aroma_groups,
+             sour_intensity, bitter_intensity, sweet_intensity, salty_intensity, flavour_groups,
+             aftertaste_length, aftertaste_type, mouthfeel,
+             body, texture, notes),
+        )
+        saved_items += 1
+    conn.commit()
+    return session_id, saved_items
+
+
+def _cupping_form_vocab():
+    return dict(
+        aroma_intensity_opts=CUPPING_AROMA_INTENSITY,
+        flavour_groups_opts=CUPPING_FLAVOUR_GROUPS,
+        aftertaste_length_opts=CUPPING_AFTERTASTE_LENGTH,
+        aftertaste_type_opts=CUPPING_AFTERTASTE_TYPE,
+        mouthfeel_opts=CUPPING_MOUTHFEEL,
+        body_opts=CUPPING_BODY,
+        texture_opts=CUPPING_TEXTURE,
+    )
+
+
+@app.route("/api/roasts-for-bean/<code>")
+@login_required
+def api_roasts_for_bean(code):
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT prfl_m_cd, prfl_name, rst_dt_iso FROM roasts WHERE bean_name=? "
+        "ORDER BY rst_dt DESC LIMIT 50",
+        (code,),
+    ).fetchall()
+    conn.close()
+    return jsonify([
+        {"prfl_m_cd": r["prfl_m_cd"], "prfl_name": r["prfl_name"], "rst_dt_iso": r["rst_dt_iso"]}
+        for r in rows
+    ])
+
+
+@app.route("/cupping")
+def cupping_list():
+    conn = get_inv_conn()
+    cur = conn.cursor()
+
+    bean_filter = request.args.get("bean", "").strip()
+    if bean_filter:
+        cur.execute("""
+            SELECT DISTINCT s.* FROM cupping_sessions s
+            JOIN cupping_items i ON i.session_id = s.id
+            WHERE i.bean_code = ?
+            ORDER BY s.cupped_at DESC
+            LIMIT 500
+        """, (bean_filter,))
+    else:
+        cur.execute("SELECT * FROM cupping_sessions ORDER BY cupped_at DESC LIMIT 500")
+    sessions = cur.fetchall()
+
+    # Pull all items for these sessions in one go, grouped by session_id.
+    session_ids = [s["id"] for s in sessions]
+    items_by_session = {}
+    if session_ids:
+        placeholders = ",".join("?" * len(session_ids))
+        cur.execute(
+            f"SELECT * FROM cupping_items WHERE session_id IN ({placeholders}) ORDER BY id",
+            session_ids,
+        )
+        for item in cur.fetchall():
+            items_by_session.setdefault(item["session_id"], []).append(item)
+
+    cur.execute("SELECT DISTINCT bean_code FROM cupping_items ORDER BY bean_code")
+    bean_codes = [row["bean_code"] for row in cur.fetchall()]
+    conn.close()
+
+    return render_template(
+        "cupping_list.html", sessions=sessions, items_by_session=items_by_session,
+        bean_codes=bean_codes, bean_filter=bean_filter,
+    )
+
+
+@app.route("/cupping/from-roasts", methods=["POST"])
+@role_required("admin", "roaster")
+def cupping_from_roasts():
+    """Build a fresh multi-item cupping session form pre-filled from checked roasts
+    on the /roasts list page (one item per checked roast, bean auto-resolved)."""
+    prfl_cds = [v.strip() for v in request.form.getlist("prfl_m_cd") if v.strip()]
+    if not prfl_cds:
+        return redirect(url_for("roasts_list"))
+
+    conn = get_conn()
+    placeholders = ",".join("?" * len(prfl_cds))
+    rows = conn.execute(
+        f"SELECT prfl_m_cd, bean_name FROM roasts WHERE prfl_m_cd IN ({placeholders})",
+        prfl_cds,
+    ).fetchall()
+    conn.close()
+
+    bean_by_cd = {r["prfl_m_cd"]: (r["bean_name"] or "") for r in rows}
+    items = [
+        {"bean_code": bean_by_cd.get(cd, ""), "roast_prfl_m_cd": cd}
+        for cd in prfl_cds
+        if cd in bean_by_cd  # ignore stale/unknown ids silently
+    ]
+    if not items:
+        return redirect(url_for("roasts_list"))
+
+    session["cupping_pending_items"] = items
+    return redirect(url_for("cupping_new"))
+
+
+@app.route("/cupping/new", methods=["GET", "POST"])
+@role_required("admin", "roaster")
+def cupping_new():
+    inv_conn = get_inv_conn()
+    beans = inv_conn.execute("SELECT code FROM beans ORDER BY code").fetchall()
+
+    preselected_bean = request.args.get("bean_code", "").strip()
+    preselected_roast = request.args.get("roast_prfl_m_cd", "").strip()
+
+    if request.method == "POST":
+        new_id, saved_items = _save_cupping_session_from_form(inv_conn)
+        inv_conn.close()
+        if saved_items == 0:
+            # Nothing usable was submitted — undo the empty session and bounce back.
+            conn2 = get_inv_conn()
+            conn2.execute("DELETE FROM cupping_sessions WHERE id=?", (new_id,))
+            conn2.commit()
+            conn2.close()
+            inv_conn2 = get_inv_conn()
+            beans2 = inv_conn2.execute("SELECT code FROM beans ORDER BY code").fetchall()
+            inv_conn2.close()
+            return render_template(
+                "cupping_form.html", beans=beans2,
+                error="Dodaj przynajmniej jedną kawę (z kodem ziarna) do sesji.",
+                preselected_bean=preselected_bean, preselected_roast=preselected_roast,
+                cupping_session=None, items=[], **_cupping_form_vocab(),
+            )
+        return redirect(url_for("cupping_session_detail", session_id=new_id))
+
+    pending_items = session.pop("cupping_pending_items", None)
+    inv_conn.close()
+    if pending_items:
+        return render_template(
+            "cupping_form.html", beans=beans, error=None,
+            preselected_bean="", preselected_roast="",
+            cupping_session=None, items=pending_items, **_cupping_form_vocab(),
+        )
+    return render_template(
+        "cupping_form.html", beans=beans, error=None,
+        preselected_bean=preselected_bean, preselected_roast=preselected_roast,
+        cupping_session=None, items=[], **_cupping_form_vocab(),
+    )
+
+
+@app.route("/cupping/<int:session_id>")
+def cupping_session_detail(session_id):
+    conn = get_inv_conn()
+    cupping_session = conn.execute("SELECT * FROM cupping_sessions WHERE id=?", (session_id,)).fetchone()
+    if not cupping_session:
+        conn.close()
+        abort(404)
+    items = conn.execute(
+        "SELECT * FROM cupping_items WHERE session_id=? ORDER BY id", (session_id,)
+    ).fetchall()
+    conn.close()
+
+    roasts_by_cd = {}
+    roast_cds = [i["roast_prfl_m_cd"] for i in items if i["roast_prfl_m_cd"]]
+    if roast_cds:
+        rconn = get_conn()
+        placeholders = ",".join("?" * len(roast_cds))
+        for r in rconn.execute(
+            f"SELECT prfl_m_cd, prfl_name, rst_dt_iso FROM roasts WHERE prfl_m_cd IN ({placeholders})",
+            roast_cds,
+        ).fetchall():
+            roasts_by_cd[r["prfl_m_cd"]] = dict(r)
+        rconn.close()
+
+    return render_template(
+        "cupping_detail.html", cupping_session=cupping_session, items=items, roasts_by_cd=roasts_by_cd,
+    )
+
+
+@app.route("/cupping/<int:session_id>/edit", methods=["GET", "POST"])
+@role_required("admin", "roaster")
+def cupping_session_edit(session_id):
+    inv_conn = get_inv_conn()
+    cupping_session = inv_conn.execute("SELECT * FROM cupping_sessions WHERE id=?", (session_id,)).fetchone()
+    if not cupping_session:
+        inv_conn.close()
+        abort(404)
+    beans = inv_conn.execute("SELECT code FROM beans ORDER BY code").fetchall()
+
+    if request.method == "POST":
+        _, saved_items = _save_cupping_session_from_form(inv_conn, session_id=session_id)
+        inv_conn.close()
+        if saved_items == 0:
+            return redirect(url_for("cupping_session_edit", session_id=session_id))
+        return redirect(url_for("cupping_session_detail", session_id=session_id))
+
+    items = inv_conn.execute(
+        "SELECT * FROM cupping_items WHERE session_id=? ORDER BY id", (session_id,)
+    ).fetchall()
+    inv_conn.close()
+    return render_template(
+        "cupping_form.html", beans=beans, error=None,
+        preselected_bean="", preselected_roast="",
+        cupping_session=cupping_session, items=[dict(i) for i in items], **_cupping_form_vocab(),
+    )
+
+
+@app.route("/cupping/<int:session_id>/delete", methods=["POST"])
+@role_required("admin", "roaster")
+def cupping_session_delete(session_id):
+    conn = get_inv_conn()
+    conn.execute("DELETE FROM cupping_items WHERE session_id=?", (session_id,))
+    conn.execute("DELETE FROM cupping_sessions WHERE id=?", (session_id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("cupping_list"))
+
+
+@app.route("/cupping/<int:session_id>/items/<int:item_id>/delete", methods=["POST"])
+@role_required("admin", "roaster")
+def cupping_item_delete(session_id, item_id):
+    conn = get_inv_conn()
+    conn.execute("DELETE FROM cupping_items WHERE id=? AND session_id=?", (item_id, session_id))
+    conn.commit()
+    remaining = conn.execute(
+        "SELECT COUNT(*) c FROM cupping_items WHERE session_id=?", (session_id,)
+    ).fetchone()["c"]
+    if remaining == 0:
+        # Don't leave an empty session dangling.
+        conn.execute("DELETE FROM cupping_sessions WHERE id=?", (session_id,))
+        conn.commit()
+        conn.close()
+        return redirect(url_for("cupping_list"))
+    conn.close()
+    return redirect(url_for("cupping_session_detail", session_id=session_id))
 
 
 if __name__ == "__main__":

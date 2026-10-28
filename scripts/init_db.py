@@ -87,6 +87,41 @@ CREATE TABLE IF NOT EXISTS bean_tags (
     UNIQUE(bean_code, tag),
     FOREIGN KEY (bean_code) REFERENCES beans(code)
 );
+
+CREATE TABLE IF NOT EXISTS cupping_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_label TEXT,                 -- e.g. "degustacja 2026-10-27"
+    cupped_at TEXT DEFAULT (datetime('now')),
+    cupper TEXT,                        -- username of whoever filled this in
+    notes TEXT                          -- overall session notes
+);
+
+CREATE TABLE IF NOT EXISTS cupping_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
+    bean_code TEXT NOT NULL,
+    roast_prfl_m_cd TEXT,               -- nullable: specific Boost roast this item judged, if known
+
+    aroma_intensity TEXT,               -- 'wysoka' / 'średnia' / 'niska'
+    aroma_groups TEXT,                  -- comma-separated, from the fixed group list
+
+    sour_intensity REAL,                -- 0-5, step 0.5
+    bitter_intensity REAL,
+    sweet_intensity REAL,
+    salty_intensity REAL,
+    flavour_groups TEXT,                -- comma-separated, same group list as aroma
+
+    aftertaste_length TEXT,             -- 'długi' / 'średni' / 'krótki'
+    aftertaste_type TEXT,               -- 'słodki' / 'gorzki' / 'kwaśny'
+    mouthfeel TEXT,                     -- comma-separated: gładki/cierpki/pylisty/wysuszający
+
+    body TEXT,                          -- 'wysokie' / 'średnie' / 'niskie' / 'krągłe' / 'traci krągłość'
+    texture TEXT,                       -- comma-separated: gładka/jedwabista/musująca/szorstka/pylista/cierpka/ostra
+
+    notes TEXT,
+    FOREIGN KEY (session_id) REFERENCES cupping_sessions(id),
+    FOREIGN KEY (bean_code) REFERENCES beans(code)
+);
 """
 
 
@@ -105,7 +140,23 @@ def main():
         print("Migrated auth.db: added 'role' column (existing admins -> role='admin').")
 
     inv_conn = sqlite3.connect(INV_DB_PATH)
+
+    # Migration: drop the old single-row-per-roast 'cuppings' table from before
+    # the multi-roast comparison redesign. Dev-only feature, always empty in
+    # practice so far — safe to drop without a data-preserving migration.
+    existing_tables = {row[0] for row in inv_conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "cupping_sessions" not in existing_tables and "cuppings" in existing_tables:
+        legacy_count = inv_conn.execute("SELECT COUNT(*) FROM cuppings").fetchone()[0]
+        if legacy_count == 0:
+            inv_conn.execute("DROP TABLE cuppings")
+            print("Dropped empty legacy 'cuppings' table (replaced by cupping_sessions/cupping_items).")
+        else:
+            print(f"WARNING: legacy 'cuppings' table has {legacy_count} row(s) — NOT dropped, needs manual migration.")
+
     inv_conn.executescript(INVENTORY_SCHEMA)
+    inv_conn.execute("CREATE INDEX IF NOT EXISTS idx_cupping_items_session ON cupping_items(session_id)")
+    inv_conn.execute("CREATE INDEX IF NOT EXISTS idx_cupping_items_bean ON cupping_items(bean_code)")
+    inv_conn.execute("CREATE INDEX IF NOT EXISTS idx_cupping_items_roast ON cupping_items(roast_prfl_m_cd)")
     inv_conn.commit()
     print(f"green_bean_inventory.db ready at {INV_DB_PATH}")
 
