@@ -50,13 +50,6 @@ Short, ordered task list distilled from [ROADMAP.md](ROADMAP.md) — this is
 roughly the order we're planning to tackle things in (see the roadmap for
 full details on each item):
 
-- [ ] **Production WSGI server** — swap Flask's dev server for gunicorn
-      behind the reverse proxy (currently running in production with the
-      dev-server warning).
-- [ ] **Automated backups** on the production host (cron + rotation).
-- [ ] **Edit bean/lot after roasting** — fix a wrong/missing bean
-      assignment from the roast detail page, with inventory
-      stock-movement correction.
 - ✅ **User accounts, roles & permissions** — self-service password
       change, admin user-management panel, role-based permissions
       (admin/roaster/viewer).
@@ -67,6 +60,13 @@ full details on each item):
 - ✅ **Cupping module** — multi-roast comparison sessions (score several
       roasts side by side in one form), descriptive checkbox-based scoring
       matching the paper cupping sheet (no numeric SCA scoring).
+- [ ] **Production WSGI server** — swap Flask's dev server for gunicorn
+      behind the reverse proxy (currently running in production with the
+      dev-server warning).
+- [ ] **Automated backups** on the production host (cron + rotation).
+- [ ] **Edit bean/lot after roasting** — fix a wrong/missing bean
+      assignment from the roast detail page, with inventory
+      stock-movement correction.
 - [ ] **IKAWA sample roaster import** — import IKAWA test-roast CSV
       exports as sample roasts linked to a green-bean lot (feeds the
       cupping module once it exists).
