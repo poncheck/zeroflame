@@ -35,7 +35,54 @@ synced before someone picked the correct bean in Boost).
   feeds inventory and future cupping links, so silent overwrites aren't
   acceptable once more than one person can make this change.
 
-## Cupping module
+## Cupping module ✅ Done
+
+Implemented as multi-roast comparison sessions rather than the original
+SCA-100-point/blind-coding draft below — Marcin's actual day-to-day need
+is comparing several roasts of the same lot side by side, not formal
+competition-style scoring.
+
+### What shipped
+
+- `cupping_sessions` (session label, date, cupper, overall notes) +
+  `cupping_items` (one row per coffee in the session: bean code, optional
+  linked roast, all sensory fields) — a session holds as many coffees as
+  needed (6+ in practice), not capped at a fixed number.
+- Multi-item form (`/cupping/new`): starts with one coffee card, "+ Dodaj
+  kolejną kawę" dynamically adds more, each with its own remove button.
+- Descriptive, checkbox-based scoring matching the paper cupping sheet
+  (aroma/flavour/aftertaste/mouthfeel/body/texture groups) — **no numeric
+  SCA scoring**, per Marcin's explicit decision.
+- Side-by-side comparison detail view (`/cupping/<id>`): rows = sensory
+  traits, columns = coffees in the session — built for comparing roasts
+  against each other, not just logging one sheet.
+- Checkboxes on the roasts list (`/roasts`) + sticky bottom bar (selection
+  persisted across pages/filters) to seed a new session straight from
+  selected roasts, instead of picking each bean/roast by hand in the form.
+- Bidirectional links: bean and roast detail pages list the cupping
+  sessions they appear in.
+- Same role model as the rest of the app: admin/roaster can create/edit/
+  delete, viewer is read-only (enforced server-side, verified with 403s).
+
+### Not included in this pass (deferred, not dropped)
+
+- Multi-taster sessions with per-sample average/spread (panel calibration).
+- Blind coding (randomized sample labels, reveal step).
+- Flavor-wheel-style descriptor vocabulary beyond the paper sheet's fixed
+  checkbox groups.
+- Roast-curve correlation view (score next to that roast's DTR/charge
+  temp/total time on the same page).
+- Supplier/lot quality trend aggregation over time.
+- PDF export of a session.
+- DiFluid Omni TDS/extraction capture during cupping.
+
+These remain good future additions and can be picked up later — the
+schema (`cupping_items.roast_prfl_m_cd`, `bean_code`) already carries
+enough to build the roast-curve correlation and lot-trend views without
+a further schema change.
+
+### Original draft (superseded by the above, kept for reference)
+
 
 The core idea: cupping sessions should link directly to existing roast
 and green-bean data (`roasts.id`, `beans.id`), so sensory scores can be

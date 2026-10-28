@@ -35,6 +35,9 @@ Bluetooth, directly in the browser (no extra hardware needed).
   ESP32 bridge or server-side component required.
 - **Green bean inventory** — stock levels, tags, batches, moisture
   readings, auto-synced usage from roasts.
+- **Cupping module** (`/cupping`) — multi-roast comparison sessions: score
+  several coffees side by side in one form, side-by-side comparison view,
+  pick roasts straight from the roast list via checkboxes.
 - **Login-gated** — simple username/password auth (SQLite-backed,
   werkzeug password hashing).
 - **Incremental sync** — a lightweight script checks for new roasts every
@@ -61,8 +64,9 @@ full details on each item):
       (prerequisite for the item below).
 - [x] **Add to iPhone home screen** (PWA basics — manifest, apple-touch-icon,
       standalone mode).
-- [ ] **Cupping module** — SCA scoring linked to `roast_id`/`bean_id`,
-      multi-taster sessions, blind coding.
+- [x] **Cupping module** — multi-roast comparison sessions (score several
+      roasts side by side in one form), descriptive checkbox-based scoring
+      matching the paper cupping sheet (no numeric SCA scoring).
 - [ ] **IKAWA sample roaster import** — import IKAWA test-roast CSV
       exports as sample roasts linked to a green-bean lot (feeds the
       cupping module once it exists).
