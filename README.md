@@ -57,14 +57,14 @@ full details on each item):
 - [ ] **Edit bean/lot after roasting** — fix a wrong/missing bean
       assignment from the roast detail page, with inventory
       stock-movement correction.
-- [x] **User accounts, roles & permissions** — self-service password
+- ✅ **User accounts, roles & permissions** — self-service password
       change, admin user-management panel, role-based permissions
       (admin/roaster/viewer).
-- [x] **Responsive design** — make every page usable on phone/tablet
+- ✅ **Responsive design** — make every page usable on phone/tablet
       (prerequisite for the item below).
-- [x] **Add to iPhone home screen** (PWA basics — manifest, apple-touch-icon,
+- ✅ **Add to iPhone home screen** (PWA basics — manifest, apple-touch-icon,
       standalone mode).
-- [x] **Cupping module** — multi-roast comparison sessions (score several
+- ✅ **Cupping module** — multi-roast comparison sessions (score several
       roasts side by side in one form), descriptive checkbox-based scoring
       matching the paper cupping sheet (no numeric SCA scoring).
 - [ ] **IKAWA sample roaster import** — import IKAWA test-roast CSV
