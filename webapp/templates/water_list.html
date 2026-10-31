@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Woda — Zeroflame{% endblock %}
+{% block content %}
+<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+  <h2 style="margin:0;">Badanie wody</h2>
+  {% if session.get('role') in ('admin', 'roaster') %}
+  <a href="{{ url_for('water_new') }}"><button type="button">+ Nowy pomiar</button></a>
+  {% endif %}
+</div>
+
+<p style="font-size:13px; color:#776a5a; margin-top:-6px;">
+  Twardość tymczasowa i całkowita odczytywane są z miernika EC w µS/cm,
+  przeliczane na TDS (ppm) wg wzoru <strong>TDS = EC × {{ tds_factor }}</strong>.
+</p>
+
+<form class="filters" method="get">
+  <select name="location" onchange="this.form.submit()">
+    <option value="">Wszystkie miejsca</option>
+    {% for loc in locations %}
+    <option value="{{ loc }}" {% if loc == location_filter %}selected{% endif %}>{{ loc|capitalize }}</option>
+    {% endfor %}
+  </select>
+  {% if location_filter %}
+  <a href="{{ url_for('water_list') }}" style="align-self:center; font-size:13px;">× wyczyść filtr</a>
+  {% endif %}
+</form>
+
+{% if not samples %}
+<p>Brak zapisanych pomiarów wody{% if location_filter %} dla miejsca <strong>{{ location_filter }}</strong>{% endif %}.</p>
+{% else %}
+<div class="table-wrap">
+<table class="sortable">
+  <thead>
+    <tr>
+      <th>Data</th>
+      <th>Miejsce</th>
+      <th>Temp. pomiaru (°C)</th>
+      <th>Twardość tymczasowa (µS/cm)</th>
+      <th>→ TDS (ppm)</th>
+      <th>Twardość całkowita (µS/cm)</th>
+      <th>→ TDS (ppm)</th>
+      <th>Notatki</th>
+      {% if session.get('role') in ('admin', 'roaster') %}
+      <th></th>
+      {% endif %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in samples %}
+    <tr>
+      <td>{{ s['sample_date'] }}</td>
+      <td><span class="pill">{{ s['location']|capitalize }}</span></td>
+      <td>{{ s['temperature_c'] if s['temperature_c'] is not none else '—' }}</td>
+      <td>{{ s['ec_temporary_us_cm'] if s['ec_temporary_us_cm'] is not none else '—' }}</td>
+      <td>{{ s['tds_temporary_ppm'] if s['tds_temporary_ppm'] is not none else '—' }}</td>
+      <td>{{ s['ec_total_us_cm'] if s['ec_total_us_cm'] is not none else '—' }}</td>
+      <td>{{ s['tds_total_ppm'] if s['tds_total_ppm'] is not none else '—' }}</td>
+      <td>{{ s['notes'] or '—' }}</td>
+      {% if session.get('role') in ('admin', 'roaster') %}
+      <td style="white-space:nowrap;">
+        <a href="{{ url_for('water_edit', sample_id=s['id']) }}" style="font-size:13px;">edytuj</a>
+        <form method="post" action="{{ url_for('water_delete', sample_id=s['id']) }}" style="display:inline; margin-left:6px;" onsubmit="return confirm('Usunąć ten pomiar?');">
+          <button type="submit" style="font-size:12px; background:transparent; border:1px solid #c0392b; color:#c0392b; padding:2px 8px;">usuń</button>
+        </form>
+      </td>
+      {% endif %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

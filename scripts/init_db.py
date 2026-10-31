@@ -122,6 +122,18 @@ CREATE TABLE IF NOT EXISTS cupping_items (
     FOREIGN KEY (session_id) REFERENCES cupping_sessions(id),
     FOREIGN KEY (bean_code) REFERENCES beans(code)
 );
+
+CREATE TABLE IF NOT EXISTS water_samples (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    location TEXT NOT NULL,             -- 'palarnia' / 'bar'
+    sample_date TEXT NOT NULL,          -- date of the measurement (Europe/Warsaw)
+    temperature_c REAL,                 -- measurement temperature (EC readings are temp-dependent)
+    ec_temporary_us_cm REAL,            -- twardość tymczasowa, read off the EC meter in µS/cm
+    ec_total_us_cm REAL,                -- twardość całkowita, read off the EC meter in µS/cm
+    notes TEXT,
+    created_by TEXT,                    -- username of whoever logged it
+    created_at TEXT DEFAULT (datetime('now'))
+);
 """
 
 
@@ -157,6 +169,7 @@ def main():
     inv_conn.execute("CREATE INDEX IF NOT EXISTS idx_cupping_items_session ON cupping_items(session_id)")
     inv_conn.execute("CREATE INDEX IF NOT EXISTS idx_cupping_items_bean ON cupping_items(bean_code)")
     inv_conn.execute("CREATE INDEX IF NOT EXISTS idx_cupping_items_roast ON cupping_items(roast_prfl_m_cd)")
+    inv_conn.execute("CREATE INDEX IF NOT EXISTS idx_water_samples_location_date ON water_samples(location, sample_date)")
     inv_conn.commit()
     print(f"green_bean_inventory.db ready at {INV_DB_PATH}")
 

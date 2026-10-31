@@ -57,7 +57,7 @@
   .back-link { display:inline-block; margin-bottom: 14px; color: var(--brown); text-decoration:none; font-size: 14px; }
   canvas { max-width: 100%; }
   .manual-form label { display:block; font-size: 13px; color: #776a5a; margin-top: 8px; }
-  .manual-form input { width: 100%; padding: 6px 10px; border: 1px solid #d8cbb9; border-radius: 6px; margin-top: 2px; }
+  .manual-form input, .manual-form select, .manual-form textarea { width: 100%; padding: 6px 10px; border: 1px solid #d8cbb9; border-radius: 6px; margin-top: 2px; font-family: inherit; font-size: 14px; box-sizing: border-box; }
   .loss { font-weight: 700; color: var(--accent); }
   table.sortable th { cursor: pointer; user-select: none; white-space: nowrap; }
   table.sortable th:hover { background: #e6d8c6; }
@@ -102,6 +102,7 @@
     <a href="{{ url_for('roasts_list') }}">Wypały</a>
     <a href="{{ url_for('inventory_list') }}">Magazyn</a>
     <a href="{{ url_for('cupping_list') }}">Cuppingi</a>
+    <a href="{{ url_for('water_list') }}">Woda</a>
     {% if session.get('username') %}
     <span style="margin-left:16px; opacity:0.85;">👤 {{ session.get('display_name') }} <span class="pill" style="margin-left:4px;">{{ session.get('role') }}</span></span>
     <a href="{{ url_for('account_password') }}" style="margin-left:10px; font-size:13px;">Zmień hasło</a>

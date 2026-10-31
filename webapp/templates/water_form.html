@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{% if sample_id %}Edytuj pomiar wody{% else %}Nowy pomiar wody{% endif %} — Zeroflame{% endblock %}
+{% block content %}
+<a href="{{ url_for('water_list') }}">« wróć do listy pomiarów</a>
+<h2>{% if sample_id %}Edytuj pomiar wody{% else %}Nowy pomiar wody{% endif %}</h2>
+
+{% if error %}
+<p style="color:#c0392b; font-weight:600;">{{ error }}</p>
+{% endif %}
+
+<form method="post" class="card manual-form" style="max-width:480px;">
+  <label>
+    Miejsce pomiaru *
+    <select name="location" required>
+      <option value="">— wybierz —</option>
+      {% for loc in locations %}
+      <option value="{{ loc }}" {% if form.get('location') == loc %}selected{% endif %}>{{ loc|capitalize }}</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label>
+    Data pomiaru *
+    <input type="date" name="sample_date" required value="{{ form.get('sample_date') or '' }}">
+  </label>
+
+  <label>
+    Temperatura pomiaru (°C)
+    <input type="number" step="0.1" name="temperature_c"
+           value="{{ form.get('temperature_c') if form.get('temperature_c') is not none else '' }}">
+  </label>
+
+  <hr>
+
+  <label>
+    Twardość tymczasowa — odczyt EC (µS/cm)
+    <input type="number" step="0.1" name="ec_temporary_us_cm"
+           value="{{ form.get('ec_temporary_us_cm') if form.get('ec_temporary_us_cm') is not none else '' }}">
+  </label>
+
+  <label>
+    Twardość całkowita — odczyt EC (µS/cm)
+    <input type="number" step="0.1" name="ec_total_us_cm"
+           value="{{ form.get('ec_total_us_cm') if form.get('ec_total_us_cm') is not none else '' }}">
+  </label>
+
+  <p style="font-size:12px; color:#776a5a;">
+    Obie wartości zostaną automatycznie przeliczone na TDS (ppm) wzorem TDS = EC × 0,75.
+  </p>
+
+  <label>
+    Notatki
+    <textarea name="notes" rows="3">{{ form.get('notes') or '' }}</textarea>
+  </label>
+
+  <div style="margin-top:18px;">
+    <button type="submit">{% if sample_id %}Zapisz zmiany{% else %}Zapisz pomiar{% endif %}</button>
+  </div>
+</form>
+{% endblock %}

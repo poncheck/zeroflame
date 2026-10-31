@@ -1145,6 +1145,155 @@ def cupping_item_delete(session_id, item_id):
     return redirect(url_for("cupping_session_detail", session_id=session_id))
 
 
+# --- Water quality module ---
+# EC meter readings (µS/cm) converted to TDS (ppm) via the standard factor
+# used for this roastery's meter: TDS = EC * 0.75.
+WATER_TDS_FACTOR = 0.75
+WATER_LOCATIONS = ["palarnia", "bar"]
+
+
+def _water_tds(ec_us_cm):
+    if ec_us_cm is None:
+        return None
+    return round(ec_us_cm * WATER_TDS_FACTOR, 1)
+
+
+def _parse_water_form(form):
+    """Shared form -> dict parsing for create/edit, with None-safe numeric fields."""
+    def _float(name):
+        val = (form.get(name) or "").strip()
+        if not val:
+            return None
+        try:
+            return float(val.replace(",", "."))
+        except ValueError:
+            return None
+
+    return {
+        "location": (form.get("location") or "").strip(),
+        "sample_date": (form.get("sample_date") or "").strip(),
+        "temperature_c": _float("temperature_c"),
+        "ec_temporary_us_cm": _float("ec_temporary_us_cm"),
+        "ec_total_us_cm": _float("ec_total_us_cm"),
+        "notes": (form.get("notes") or "").strip() or None,
+    }
+
+
+@app.route("/water")
+def water_list():
+    conn = get_inv_conn()
+    cur = conn.cursor()
+
+    location_filter = request.args.get("location", "").strip()
+    if location_filter:
+        cur.execute(
+            "SELECT * FROM water_samples WHERE location=? ORDER BY sample_date DESC, id DESC LIMIT 500",
+            (location_filter,),
+        )
+    else:
+        cur.execute("SELECT * FROM water_samples ORDER BY sample_date DESC, id DESC LIMIT 500")
+    samples = [dict(r) for r in cur.fetchall()]
+    conn.close()
+
+    for s in samples:
+        s["tds_temporary_ppm"] = _water_tds(s["ec_temporary_us_cm"])
+        s["tds_total_ppm"] = _water_tds(s["ec_total_us_cm"])
+
+    return render_template(
+        "water_list.html", samples=samples, locations=WATER_LOCATIONS,
+        location_filter=location_filter, tds_factor=WATER_TDS_FACTOR,
+    )
+
+
+@app.route("/water/new", methods=["GET", "POST"])
+@role_required("admin", "roaster")
+def water_new():
+    preselected_location = request.args.get("location", "").strip()
+
+    if request.method == "POST":
+        data = _parse_water_form(request.form)
+        if not data["location"] or data["location"] not in WATER_LOCATIONS:
+            return render_template(
+                "water_form.html", locations=WATER_LOCATIONS, form=data,
+                error="Wybierz miejsce pomiaru (palarnia / bar).",
+            )
+        if not data["sample_date"]:
+            return render_template(
+                "water_form.html", locations=WATER_LOCATIONS, form=data,
+                error="Podaj datę pomiaru.",
+            )
+        conn = get_inv_conn()
+        conn.execute(
+            """INSERT INTO water_samples
+               (location, sample_date, temperature_c, ec_temporary_us_cm, ec_total_us_cm, notes, created_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                data["location"], data["sample_date"], data["temperature_c"],
+                data["ec_temporary_us_cm"], data["ec_total_us_cm"], data["notes"],
+                session.get("username"),
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return redirect(url_for("water_list"))
+
+    today = datetime.now(WARSAW_TZ).strftime("%Y-%m-%d")
+    form = {"location": preselected_location, "sample_date": today}
+    return render_template("water_form.html", locations=WATER_LOCATIONS, form=form, error=None)
+
+
+@app.route("/water/<int:sample_id>/edit", methods=["GET", "POST"])
+@role_required("admin", "roaster")
+def water_edit(sample_id):
+    conn = get_inv_conn()
+    sample = conn.execute("SELECT * FROM water_samples WHERE id=?", (sample_id,)).fetchone()
+    if sample is None:
+        conn.close()
+        abort(404)
+
+    if request.method == "POST":
+        data = _parse_water_form(request.form)
+        if not data["location"] or data["location"] not in WATER_LOCATIONS:
+            conn.close()
+            return render_template(
+                "water_form.html", locations=WATER_LOCATIONS, form=data, sample_id=sample_id,
+                error="Wybierz miejsce pomiaru (palarnia / bar).",
+            )
+        if not data["sample_date"]:
+            conn.close()
+            return render_template(
+                "water_form.html", locations=WATER_LOCATIONS, form=data, sample_id=sample_id,
+                error="Podaj datę pomiaru.",
+            )
+        conn.execute(
+            """UPDATE water_samples SET location=?, sample_date=?, temperature_c=?,
+               ec_temporary_us_cm=?, ec_total_us_cm=?, notes=? WHERE id=?""",
+            (
+                data["location"], data["sample_date"], data["temperature_c"],
+                data["ec_temporary_us_cm"], data["ec_total_us_cm"], data["notes"],
+                sample_id,
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return redirect(url_for("water_list"))
+
+    conn.close()
+    return render_template(
+        "water_form.html", locations=WATER_LOCATIONS, form=dict(sample), sample_id=sample_id, error=None,
+    )
+
+
+@app.route("/water/<int:sample_id>/delete", methods=["POST"])
+@role_required("admin", "roaster")
+def water_delete(sample_id):
+    conn = get_inv_conn()
+    conn.execute("DELETE FROM water_samples WHERE id=?", (sample_id,))
+    conn.commit()
+    conn.close()
+    return redirect(url_for("water_list"))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8088)
