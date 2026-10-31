@@ -113,6 +113,68 @@ def recompute_bean_stats(inv_conn, bean_code=None):
     main_conn.close()
 
 
+def reassign_roast_bean(main_conn, inv_conn, prfl_m_cd, new_bean_code, new_grn_bean_amt):
+    """Change which bean a saved roast is attributed to (and/or its green-bean
+    weight), used from the roast detail page — e.g. roasts synced from Boost
+    with no bean assigned yet, or a wrong assignment that needs fixing.
+
+    Keeps stock_movements in sync: removes the old 'usage' movement tied to
+    this roast (if any — it belonged to whatever bean/weight was set before),
+    inserts a fresh one for the new bean/weight (if a bean is now set), and
+    recomputes current_stock_kg/roast_count for every bean affected so the
+    inventory numbers never drift from what's actually on roasts.
+
+    new_bean_code may be None/'' to explicitly clear the assignment (roast
+    goes back to having no bean, e.g. to fix a wrong auto-match) — in that
+    case no new usage movement is inserted.
+    """
+    main_cur = main_conn.cursor()
+    inv_cur = inv_conn.cursor()
+
+    main_cur.execute("SELECT bean_name, grn_bean_amt, prfl_name, rst_dt_iso FROM roasts WHERE prfl_m_cd=?", (prfl_m_cd,))
+    row = main_cur.fetchone()
+    if not row:
+        raise ValueError(f"No roast found for prfl_m_cd={prfl_m_cd}")
+    old_bean_code, _old_amt, prfl_name, rst_dt_iso = row
+
+    new_bean_code = (new_bean_code or "").strip() or None
+
+    # Clear any previous usage movement tied to this specific roast — it no
+    # longer reflects reality once the bean/weight changes.
+    inv_cur.execute("DELETE FROM stock_movements WHERE reference_cd=?", (prfl_m_cd,))
+
+    main_cur.execute(
+        "UPDATE roasts SET bean_name=?, grn_bean_amt=? WHERE prfl_m_cd=?",
+        (new_bean_code, new_grn_bean_amt, prfl_m_cd),
+    )
+    main_conn.commit()
+
+    affected = set()
+    if old_bean_code:
+        affected.add(old_bean_code)
+
+    if new_bean_code:
+        known = inv_cur.execute("SELECT 1 FROM beans WHERE code=?", (new_bean_code,)).fetchone()
+        if known:
+            amount = -(new_grn_bean_amt or 0.6)
+            inv_cur.execute(
+                "INSERT INTO stock_movements (bean_code, movement_type, amount_kg, movement_date, notes, source, reference_cd) "
+                "VALUES (?, 'usage', ?, ?, ?, 'roast_manual_reassign', ?)",
+                (new_bean_code, amount, rst_dt_iso, f"wypał: {prfl_name} (ziarno przypisane ręcznie)", prfl_m_cd),
+            )
+            affected.add(new_bean_code)
+        # else: bean code not in inventory yet — roasts.bean_name is still set
+        # (so cupping/detail pages show it), but no stock movement is created
+        # until the bean exists in `beans` (same behaviour as the auto-sync path).
+
+    inv_conn.commit()
+
+    for code in affected:
+        recompute_bean_stats(inv_conn, code)
+
+    return {"old_bean_code": old_bean_code, "new_bean_code": new_bean_code, "affected_beans": sorted(affected)}
+
+
 def main_db_sync(quiet=False):
     """Programmatic entry point: sync + recompute, print only if something changed (unless quiet=False forces always)."""
     main_conn = sqlite3.connect(MAIN_DB)

@@ -14,6 +14,10 @@
             <a class="row-link" href="{{ url_for('inventory_detail', code=r['bean_name']) }}">{{ r['bean_name'] }}</a>
           {% else %}
             {{ r['bean_name'] or '—' }}
+            {% if not r['bean_name'] %}<span style="color:#c9792b; font-size:12px;"> (brak przypisania)</span>{% endif %}
+          {% endif %}
+          {% if session.get('role') in ('admin', 'roaster') %}
+          <button type="button" id="beanReassignToggle" style="margin-left:8px; font-size:11px; padding:2px 8px;">✎ zmień</button>
           {% endif %}
         </dd>
         <dt>Wsad (kg)</dt><dd>{{ r['grn_bean_amt'] or '—' }}</dd>
@@ -35,6 +39,35 @@
         <dt>Dev time / DTR</dt><dd>{{ r['dev_time']|mmss }} / {{ r['dtr'] }}%</dd>
         <dt>Notatki (Boost)</dt><dd>{{ r['memo'] or '—' }}</dd>
       </dl>
+
+      {% if session.get('role') in ('admin', 'roaster') %}
+      <form id="beanReassignForm" method="post" action="{{ url_for('roast_reassign_bean', prfl_m_cd=r['prfl_m_cd']) }}"
+            style="display:none; margin-top:10px; padding:10px; border:1px solid #d8cbb9; border-radius:8px; background:#faf6ef;">
+        <label style="display:block; font-size:12px; color:#776a5a; margin-bottom:6px;">
+          Surowiec (ziarno)
+          <select name="bean_code" style="width:100%; padding:5px 8px; margin-top:2px;">
+            <option value="">— brak (wyczyść przypisanie) —</option>
+            {% for b in available_beans %}
+            <option value="{{ b['code'] }}" {% if r['bean_name'] == b['code'] %}selected{% endif %}>
+              {{ b['code'] }}{% if b['full_name'] %} — {{ b['full_name'] }}{% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label style="display:block; font-size:12px; color:#776a5a; margin-bottom:6px;">
+          Waga surowca — wsad zielonej kawy (kg)
+          <input type="number" step="0.01" name="grn_bean_amt" value="{{ r['grn_bean_amt'] or '' }}"
+                 style="width:100%; padding:5px 8px; margin-top:2px;">
+        </label>
+        <div style="display:flex; gap:8px;">
+          <button type="submit" style="font-size:12px; padding:4px 10px;">Zapisz surowiec</button>
+          <button type="button" id="beanReassignCancel" style="font-size:12px; padding:4px 10px; background:#9a8b73;">Anuluj</button>
+        </div>
+        <p style="font-size:11px; color:#776a5a; margin:6px 0 0;">
+          Zmiana surowca i/lub wagi automatycznie koryguje ruchy magazynowe (zużycie) powiązane z tym wypałem.
+        </p>
+      </form>
+      {% endif %}
     </div>
     {% if whole_row or ground_row %}
     <div id="beanColorWidget" style="flex:0 0 auto; text-align:center; width:180px;"
@@ -326,6 +359,20 @@ function omniOnResult(kind, agtronAvg, varValue) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+  const toggleBtn = document.getElementById('beanReassignToggle');
+  const form = document.getElementById('beanReassignForm');
+  const cancelBtn = document.getElementById('beanReassignCancel');
+  if (toggleBtn && form) {
+    toggleBtn.addEventListener('click', function () {
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    });
+  }
+  if (cancelBtn && form) {
+    cancelBtn.addEventListener('click', function () {
+      form.style.display = 'none';
+    });
+  }
+
   const connectBtn = document.getElementById('bleConnectBtn');
   const measureBtn = document.getElementById('bleMeasureBtn');
   if (!connectBtn || !measureBtn) return; // viewer role: edit form (and these buttons) isn't rendered

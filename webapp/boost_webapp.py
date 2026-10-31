@@ -29,6 +29,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.config import DB_PATH, INV_DB_PATH, AUTH_DB_PATH, FLASK_SECRET_KEY  # noqa: E402
+from scripts.inventory_sync import reassign_roast_bean  # noqa: E402
 
 WARSAW_TZ = ZoneInfo("Europe/Warsaw")
 
@@ -595,6 +596,9 @@ def roast_detail(prfl_m_cd):
            JOIN cupping_sessions s ON s.id = i.session_id
            WHERE i.roast_prfl_m_cd=? ORDER BY s.cupped_at DESC""", (prfl_m_cd,)
     ).fetchall()
+    available_beans = inv_conn.execute(
+        "SELECT code, full_name FROM beans ORDER BY code"
+    ).fetchall()
     inv_conn.close()
 
     conn.close()
@@ -603,8 +607,36 @@ def roast_detail(prfl_m_cd):
         weight_row=weight_row, loss_pct=loss_pct,
         rst_mod_labels=RST_MOD_LABELS, rst_lvl_labels=RST_LVL_LABELS,
         original_profile_cd=original_profile_cd, bean_in_inventory=bean_in_inventory,
-        roast_cuppings=roast_cuppings,
+        roast_cuppings=roast_cuppings, available_beans=available_beans,
     )
+
+
+@app.route("/api/roast/<prfl_m_cd>/bean", methods=["POST"])
+@role_required("admin", "roaster")
+def roast_reassign_bean(prfl_m_cd):
+    """Change (or clear) the bean assigned to an already-saved roast, and/or
+    its green-bean input weight — e.g. roasts synced from Boost with no bean
+    yet, or a wrong auto-match. Keeps inventory stock movements in sync.
+    Dev-only feature (not yet promoted to production)."""
+    new_bean_code = (request.form.get("bean_code") or "").strip()
+    weight_raw = (request.form.get("grn_bean_amt") or "").strip()
+    try:
+        new_grn_bean_amt = float(weight_raw) if weight_raw else None
+    except ValueError:
+        new_grn_bean_amt = None
+
+    main_conn = sqlite3.connect(DB_PATH)
+    main_conn.row_factory = sqlite3.Row
+    inv_conn = get_inv_conn()
+    try:
+        reassign_roast_bean(main_conn, inv_conn, prfl_m_cd, new_bean_code, new_grn_bean_amt)
+    except ValueError:
+        main_conn.close()
+        inv_conn.close()
+        abort(404)
+    main_conn.close()
+    inv_conn.close()
+    return redirect(url_for("roast_detail", prfl_m_cd=prfl_m_cd))
 
 
 @app.route("/api/roast/<prfl_m_cd>/curve")
