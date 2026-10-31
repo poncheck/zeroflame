@@ -1175,6 +1175,7 @@ def _parse_water_form(form):
         "temperature_c": _float("temperature_c"),
         "ec_temporary_us_cm": _float("ec_temporary_us_cm"),
         "ec_total_us_cm": _float("ec_total_us_cm"),
+        "ph": _float("ph"),
         "notes": (form.get("notes") or "").strip() or None,
     }
 
@@ -1225,11 +1226,11 @@ def water_new():
         conn = get_inv_conn()
         conn.execute(
             """INSERT INTO water_samples
-               (location, sample_date, temperature_c, ec_temporary_us_cm, ec_total_us_cm, notes, created_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               (location, sample_date, temperature_c, ec_temporary_us_cm, ec_total_us_cm, ph, notes, created_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 data["location"], data["sample_date"], data["temperature_c"],
-                data["ec_temporary_us_cm"], data["ec_total_us_cm"], data["notes"],
+                data["ec_temporary_us_cm"], data["ec_total_us_cm"], data["ph"], data["notes"],
                 session.get("username"),
             ),
         )
@@ -1267,10 +1268,10 @@ def water_edit(sample_id):
             )
         conn.execute(
             """UPDATE water_samples SET location=?, sample_date=?, temperature_c=?,
-               ec_temporary_us_cm=?, ec_total_us_cm=?, notes=? WHERE id=?""",
+               ec_temporary_us_cm=?, ec_total_us_cm=?, ph=?, notes=? WHERE id=?""",
             (
                 data["location"], data["sample_date"], data["temperature_c"],
-                data["ec_temporary_us_cm"], data["ec_total_us_cm"], data["notes"],
+                data["ec_temporary_us_cm"], data["ec_total_us_cm"], data["ph"], data["notes"],
                 sample_id,
             ),
         )

@@ -9,6 +9,7 @@
 </div>
 
 <p style="font-size:13px; color:#776a5a; margin-top:-6px;">
+  Woda mierzona jest za filtrem (po filtracji, nie surowa z sieci).
   Twardość tymczasowa i całkowita odczytywane są z miernika EC w µS/cm,
   przeliczane na TDS (ppm) wg wzoru <strong>TDS = EC × {{ tds_factor }}</strong>.
 </p>
@@ -39,6 +40,7 @@
       <th>→ TDS (ppm)</th>
       <th>Twardość całkowita (µS/cm)</th>
       <th>→ TDS (ppm)</th>
+      <th>pH</th>
       <th>Notatki</th>
       {% if session.get('role') in ('admin', 'roaster') %}
       <th></th>
@@ -55,6 +57,7 @@
       <td>{{ s['tds_temporary_ppm'] if s['tds_temporary_ppm'] is not none else '—' }}</td>
       <td>{{ s['ec_total_us_cm'] if s['ec_total_us_cm'] is not none else '—' }}</td>
       <td>{{ s['tds_total_ppm'] if s['tds_total_ppm'] is not none else '—' }}</td>
+      <td>{{ s['ph'] if s['ph'] is not none else '—' }}</td>
       <td>{{ s['notes'] or '—' }}</td>
       {% if session.get('role') in ('admin', 'roaster') %}
       <td style="white-space:nowrap;">

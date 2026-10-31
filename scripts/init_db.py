@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS water_samples (
     temperature_c REAL,                 -- measurement temperature (EC readings are temp-dependent)
     ec_temporary_us_cm REAL,            -- twardość tymczasowa, read off the EC meter in µS/cm
     ec_total_us_cm REAL,                -- twardość całkowita, read off the EC meter in µS/cm
+    ph REAL,                            -- pH of the water sample
     notes TEXT,
     created_by TEXT,                    -- username of whoever logged it
     created_at TEXT DEFAULT (datetime('now'))
@@ -170,6 +171,13 @@ def main():
     inv_conn.execute("CREATE INDEX IF NOT EXISTS idx_cupping_items_bean ON cupping_items(bean_code)")
     inv_conn.execute("CREATE INDEX IF NOT EXISTS idx_cupping_items_roast ON cupping_items(roast_prfl_m_cd)")
     inv_conn.execute("CREATE INDEX IF NOT EXISTS idx_water_samples_location_date ON water_samples(location, sample_date)")
+
+    # Migration: older databases may already have water_samples without the 'ph' column.
+    water_cols = {row[1] for row in inv_conn.execute("PRAGMA table_info(water_samples)")}
+    if "ph" not in water_cols:
+        inv_conn.execute("ALTER TABLE water_samples ADD COLUMN ph REAL")
+        print("Migrated green_bean_inventory.db: added 'ph' column to water_samples.")
+
     inv_conn.commit()
     print(f"green_bean_inventory.db ready at {INV_DB_PATH}")
 
