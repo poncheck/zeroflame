@@ -81,9 +81,15 @@
       (pamiętane też po zmianie strony/filtra)
       <a href="#" id="clearSelectionLink" style="margin-left:10px; font-size:13px;">× wyczyść zaznaczenie</a>
     </span>
-    <button type="submit" id="addToCuppingBtn" disabled>+ Dodaj zaznaczone do cuppingu</button>
+    <span style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button type="submit" id="addToBatchBtn" disabled form="roastsToBatchForm">+ Dodaj zaznaczone do partii</button>
+      <button type="submit" id="addToCuppingBtn" disabled>+ Dodaj zaznaczone do cuppingu</button>
+    </span>
   </div>
   <div id="hiddenSelectedInputs"></div>
+</form>
+<form method="post" action="{{ url_for('batches_from_roasts') }}" id="roastsToBatchForm">
+  <div id="hiddenSelectedInputsBatch"></div>
 </form>
 
 <script>
@@ -93,9 +99,12 @@
   const selectAll = document.getElementById('selectAllRoasts');
   const countEl = document.getElementById('selectedCount');
   const addBtn = document.getElementById('addToCuppingBtn');
+  const addBatchBtn = document.getElementById('addToBatchBtn');
   const hiddenContainer = document.getElementById('hiddenSelectedInputs');
+  const hiddenContainerBatch = document.getElementById('hiddenSelectedInputsBatch');
   const clearLink = document.getElementById('clearSelectionLink');
   const form = document.getElementById('roastsToCuppingForm');
+  const batchForm = document.getElementById('roastsToBatchForm');
 
   function loadSelected() {
     try {
@@ -112,6 +121,7 @@
     checkboxes.forEach(function (cb) { cb.checked = selected.has(cb.value); });
     countEl.textContent = selected.size;
     addBtn.disabled = selected.size === 0;
+    if (addBatchBtn) addBatchBtn.disabled = selected.size === 0;
     if (selectAll) {
       selectAll.checked = checkboxes.length > 0 && checkboxes.every(function (cb) { return selected.has(cb.value); });
     }
@@ -143,18 +153,29 @@
     refreshUI();
   });
 
-  form.addEventListener('submit', function () {
-    hiddenContainer.innerHTML = '';
+  function fillHidden(container) {
+    container.innerHTML = '';
     selected.forEach(function (prfl) {
       const input = document.createElement('input');
       input.type = 'hidden';
       input.name = 'prfl_m_cd';
       input.value = prfl;
-      hiddenContainer.appendChild(input);
+      container.appendChild(input);
     });
+  }
+
+  form.addEventListener('submit', function () {
+    fillHidden(hiddenContainer);
     // Selection carried the roast into the new cupping form — safe to clear now.
     sessionStorage.removeItem(STORAGE_KEY);
   });
+
+  if (batchForm) {
+    batchForm.addEventListener('submit', function () {
+      fillHidden(hiddenContainerBatch);
+      sessionStorage.removeItem(STORAGE_KEY);
+    });
+  }
 
   refreshUI();
 })();

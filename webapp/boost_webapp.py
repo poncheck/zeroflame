@@ -721,6 +721,105 @@ def batch_label_pdf(bean_code):
     )
 
 
+@app.route("/batches")
+@role_required("admin", "roaster")
+def batches_list():
+    """Manual batch list/management — lets you add a batch (weight + coffee
+    type) for any bean+date by hand, not just via the dashboard's
+    'koniec palenia partii' button on today's chart. Covers days with no
+    roast recorded today, or batches you want to log after the fact."""
+    inv_conn = get_inv_conn()
+    beans = inv_conn.execute("SELECT code, full_name FROM beans ORDER BY code").fetchall()
+    rows = inv_conn.execute(
+        "SELECT * FROM batch_labels ORDER BY batch_date DESC, bean_code ASC LIMIT 200"
+    ).fetchall()
+    inv_conn.close()
+
+    preselected_bean = (request.args.get("bean_code") or "").strip()
+    preselected_date = (request.args.get("date") or "").strip()
+    return render_template(
+        "batches_list.html", beans=beans, rows=rows,
+        preselected_bean=preselected_bean, preselected_date=preselected_date,
+        today=datetime.now(WARSAW_TZ).strftime("%Y-%m-%d"),
+    )
+
+
+@app.route("/batches/save", methods=["POST"])
+@role_required("admin", "roaster")
+def batches_save():
+    """Create or update a batch row by hand (manual add/edit from /batches)."""
+    bean_code = (request.form.get("bean_code") or "").strip()
+    batch_date = (request.form.get("batch_date") or "").strip()
+    weight_raw = (request.form.get("finished_weight_kg") or "").strip()
+    coffee_type = (request.form.get("coffee_type") or "").strip() or None
+    if not bean_code or not batch_date:
+        abort(400)
+    if coffee_type not in (None, "przelew", "espresso"):
+        coffee_type = None
+    try:
+        weight_kg = float(weight_raw) if weight_raw else None
+    except ValueError:
+        weight_kg = None
+
+    now = datetime.now(WARSAW_TZ).isoformat()
+    inv_conn = get_inv_conn()
+    inv_conn.execute(
+        """INSERT INTO batch_labels (bean_code, batch_date, finished_weight_kg, coffee_type, finished_by, finished_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(bean_code, batch_date) DO UPDATE SET
+               finished_weight_kg=excluded.finished_weight_kg,
+               coffee_type=COALESCE(excluded.coffee_type, batch_labels.coffee_type),
+               finished_by=excluded.finished_by,
+               finished_at=excluded.finished_at""",
+        (bean_code, batch_date, weight_kg, coffee_type, session.get("username"), now),
+    )
+    inv_conn.commit()
+    inv_conn.close()
+    return redirect(url_for("batches_list"))
+
+
+@app.route("/batches/<int:batch_id>/delete", methods=["POST"])
+@role_required("admin", "roaster")
+def batches_delete(batch_id):
+    inv_conn = get_inv_conn()
+    inv_conn.execute("DELETE FROM batch_labels WHERE id=?", (batch_id,))
+    inv_conn.commit()
+    inv_conn.close()
+    return redirect(url_for("batches_list"))
+
+
+@app.route("/batches/from-roasts", methods=["POST"])
+@role_required("admin", "roaster")
+def batches_from_roasts():
+    """'+ Dodaj zaznaczone do partii' on the /roasts list — takes checked
+    roasts, resolves their (single) bean and roast date, and sends you to
+    the manual batch form pre-filled so you only need to type the weight."""
+    prfl_cds = [v.strip() for v in request.form.getlist("prfl_m_cd") if v.strip()]
+    if not prfl_cds:
+        return redirect(url_for("roasts_list"))
+
+    conn = get_conn()
+    placeholders = ",".join("?" * len(prfl_cds))
+    rows = conn.execute(
+        f"SELECT bean_name, rst_dt_iso FROM roasts WHERE prfl_m_cd IN ({placeholders})",
+        prfl_cds,
+    ).fetchall()
+    conn.close()
+
+    bean_names = {(r["bean_name"] or "").strip() for r in rows if r["bean_name"]}
+    dates = {r["rst_dt_iso"][:10] for r in rows if r["rst_dt_iso"]}
+
+    if len(bean_names) != 1:
+        # Mixed or missing bean across the selection — can't auto-resolve which
+        # bean the batch belongs to, so send the user to the manual form empty
+        # rather than silently guessing wrong.
+        return redirect(url_for("batches_list"))
+
+    bean_code = next(iter(bean_names))
+    batch_date = max(dates) if dates else datetime.now(WARSAW_TZ).strftime("%Y-%m-%d")
+    return redirect(url_for("batches_list", bean_code=bean_code, date=batch_date))
+
+
 @app.route("/api/roast/<prfl_m_cd>/curve")
 def roast_curve(prfl_m_cd):
     conn = get_conn()

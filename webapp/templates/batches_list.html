@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Partie — Zeroflame{% endblock %}
+{% block content %}
+<h2>Partie (wydruk etykiet)</h2>
+<p style="color:#776a5a; font-size:14px;">
+  Zapisz wagę po wypale i typ kawy (espresso / przelew) dla dowolnego ziarna i dnia —
+  niezależnie od tego, czy na dashboardzie pokazuje się dzisiejszy wykres. Etykietę
+  100×150mm wydrukujesz stąd albo z dashboardu.
+</p>
+
+<div class="card manual-form">
+  <h3 style="margin-top:0;">Dodaj / edytuj partię</h3>
+  <form method="post" action="{{ url_for('batches_save') }}">
+    <label for="bean_code">Ziarno *</label>
+    <select name="bean_code" id="bean_code" required>
+      <option value="">— wybierz —</option>
+      {% for b in beans %}
+      <option value="{{ b['code'] }}" {% if b['code'] == preselected_bean %}selected{% endif %}>
+        {{ b['full_name'] or b['code'] }} ({{ b['code'] }})
+      </option>
+      {% endfor %}
+    </select>
+
+    <label for="batch_date" style="margin-top:10px;">Data palenia *</label>
+    <input type="date" name="batch_date" id="batch_date" value="{{ preselected_date or today }}" required>
+
+    <label for="finished_weight_kg" style="margin-top:10px;">Waga po wypaleniu (kg)</label>
+    <input type="number" step="0.001" name="finished_weight_kg" id="finished_weight_kg" placeholder="np. 11.200">
+
+    <label style="margin-top:10px;">Typ kawy</label>
+    <label style="display:inline-flex; align-items:center; gap:4px; margin-right:12px; font-weight:400;">
+      <input type="radio" name="coffee_type" value="przelew" checked> Przelew
+    </label>
+    <label style="display:inline-flex; align-items:center; gap:4px; font-weight:400;">
+      <input type="radio" name="coffee_type" value="espresso"> Espresso
+    </label>
+
+    <div style="margin-top:16px;">
+      <button type="submit">Zapisz partię</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h3 style="margin-top:0;">Ostatnie partie</h3>
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Data</th>
+        <th>Ziarno</th>
+        <th>Waga po wypale</th>
+        <th>Typ</th>
+        <th>Zapisał</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r['batch_date'] }}</td>
+        <td>{{ r['bean_code'] }}</td>
+        <td>{% if r['finished_weight_kg'] is not none %}{{ '%.3f'|format(r['finished_weight_kg']) }} kg{% else %}—{% endif %}</td>
+        <td>{{ 'Espresso' if r['coffee_type'] == 'espresso' else ('Przelew' if r['coffee_type'] == 'przelew' else '—') }}</td>
+        <td>{{ r['finished_by'] or '—' }}</td>
+        <td style="white-space:nowrap;">
+          <a class="row-link" href="{{ url_for('batch_label_pdf', bean_code=r['bean_code'], date=r['batch_date'], coffee_type=r['coffee_type'] or 'przelew') }}" target="_blank">🖨️ etykieta</a>
+          &nbsp;|&nbsp;
+          <form method="post" action="{{ url_for('batches_delete', batch_id=r['id']) }}" style="display:inline;" onsubmit="return confirm('Usunąć tę partię?');">
+            <button type="submit" style="background:#b5504a; font-size:12px; padding:2px 8px;">usuń</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      {% if not rows %}
+      <tr><td colspan="6" style="color:#776a5a;">Brak zapisanych partii.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}
