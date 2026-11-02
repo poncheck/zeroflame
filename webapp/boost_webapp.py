@@ -24,12 +24,13 @@ import argparse
 from functools import wraps
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
-from flask import Flask, render_template, request, redirect, url_for, jsonify, abort, session
+from flask import Flask, render_template, request, redirect, url_for, jsonify, abort, session, Response
 from werkzeug.security import check_password_hash, generate_password_hash
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from common.config import DB_PATH, INV_DB_PATH, AUTH_DB_PATH, FLASK_SECRET_KEY  # noqa: E402
 from scripts.inventory_sync import reassign_roast_bean  # noqa: E402
+from scripts.batch_label import build_label_pdf  # noqa: E402
 
 WARSAW_TZ = ZoneInfo("Europe/Warsaw")
 
@@ -372,12 +373,22 @@ def index():
 
     inv_conn = get_inv_conn()
     inv_codes = {r["code"] for r in inv_conn.execute("SELECT code FROM beans").fetchall()}
+
+    batch_status = {}
+    today_bean_order = []
+    if today_chart_data:
+        today_bean_order = list(today_chart_data["by_bean"].keys())
+        rows = inv_conn.execute(
+            "SELECT * FROM batch_labels WHERE batch_date=?", (today_str,)
+        ).fetchall()
+        batch_status = {r["bean_code"]: dict(r) for r in rows}
     inv_conn.close()
 
     return render_template(
         "index.html", total=total, with_detail=with_detail, span=span, beans=beans,
         wc=wc, gc=gc, pw=pw, recent=recent, inv_codes=inv_codes,
-        today_chart_data=today_chart_data,
+        today_chart_data=today_chart_data, batch_status=batch_status,
+        today_bean_order=today_bean_order,
     )
 
 
@@ -637,6 +648,77 @@ def roast_reassign_bean(prfl_m_cd):
     main_conn.close()
     inv_conn.close()
     return redirect(url_for("roast_detail", prfl_m_cd=prfl_m_cd))
+
+
+@app.route("/api/batch/<bean_code>/finish", methods=["POST"])
+@role_required("admin", "roaster")
+def batch_finish(bean_code):
+    """'Koniec palenia partii' — records the total finished (roasted) weight
+    for today's batch of this bean, shown on the dashboard chart and printed
+    on the label. One row per (bean_code, batch_date) — re-clicking with a
+    new weight just overwrites it."""
+    batch_date = (request.form.get("batch_date") or "").strip()
+    weight_raw = (request.form.get("finished_weight_kg") or "").strip()
+    if not batch_date:
+        abort(400)
+    try:
+        weight_kg = float(weight_raw) if weight_raw else None
+    except ValueError:
+        weight_kg = None
+
+    now = datetime.now(WARSAW_TZ).isoformat()
+    inv_conn = get_inv_conn()
+    inv_conn.execute(
+        """INSERT INTO batch_labels (bean_code, batch_date, finished_weight_kg, finished_by, finished_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(bean_code, batch_date) DO UPDATE SET
+               finished_weight_kg=excluded.finished_weight_kg,
+               finished_by=excluded.finished_by,
+               finished_at=excluded.finished_at""",
+        (bean_code, batch_date, weight_kg, session.get("username"), now),
+    )
+    inv_conn.commit()
+    inv_conn.close()
+    return redirect(url_for("index"))
+
+
+@app.route("/api/batch/<bean_code>/label.pdf")
+@role_required("admin", "roaster")
+def batch_label_pdf(bean_code):
+    """Generates the 100x150mm batch label PDF (bean, roast date, finished
+    weight, przelew/espresso stamp) for printing from the dashboard."""
+    batch_date = (request.args.get("date") or "").strip()
+    coffee_type = (request.args.get("coffee_type") or "przelew").strip()
+    if coffee_type not in ("przelew", "espresso"):
+        coffee_type = "przelew"
+    if not batch_date:
+        abort(400)
+
+    inv_conn = get_inv_conn()
+    bean_row = inv_conn.execute("SELECT full_name FROM beans WHERE code=?", (bean_code,)).fetchone()
+    label_row = inv_conn.execute(
+        "SELECT finished_weight_kg FROM batch_labels WHERE bean_code=? AND batch_date=?",
+        (bean_code, batch_date),
+    ).fetchone()
+    inv_conn.execute(
+        """INSERT INTO batch_labels (bean_code, batch_date, coffee_type)
+           VALUES (?, ?, ?)
+           ON CONFLICT(bean_code, batch_date) DO UPDATE SET coffee_type=excluded.coffee_type""",
+        (bean_code, batch_date, coffee_type),
+    )
+    inv_conn.commit()
+    inv_conn.close()
+
+    display_name = (bean_row["full_name"] if bean_row and bean_row["full_name"] else bean_code)
+    weight_kg = label_row["finished_weight_kg"] if label_row else None
+    pdf_bytes = build_label_pdf(display_name, batch_date, weight_kg, coffee_type)
+
+    filename = f"etykieta_{bean_code}_{batch_date}.pdf"
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.route("/api/roast/<prfl_m_cd>/curve")

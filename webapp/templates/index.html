@@ -51,6 +51,9 @@
 {% if today_chart_data %}
 <script>
 const todayChartData = {{ today_chart_data['by_bean']|tojson }};
+const batchStatus = {{ batch_status|tojson }};
+const batchDate = {{ today_chart_data['date']|tojson }};
+const canEditBatches = {{ (session.get('role') in ('admin', 'roaster'))|tojson }};
 
 function agtronToColor(v) {
   if (v === null || v === undefined) return null;
@@ -261,6 +264,112 @@ function drawBeanChart(container, beanName, batches) {
   canvas.addEventListener('mouseleave', () => {
     tooltip.style.display = 'none';
   });
+
+  // --- "koniec palenia partii" + etykieta controls, directly under the chart ---
+  const panel = document.createElement('div');
+  panel.style.marginTop = '10px';
+  panel.style.padding = '10px';
+  panel.style.border = '1px solid #d8cbb9';
+  panel.style.borderRadius = '8px';
+  panel.style.background = '#faf6ef';
+  panel.style.display = 'flex';
+  panel.style.flexWrap = 'wrap';
+  panel.style.gap = '10px';
+  panel.style.alignItems = 'center';
+
+  const status = batchStatus[beanName];
+  const finishedWeight = status ? status.finished_weight_kg : null;
+  const savedCoffeeType = status ? status.coffee_type : null;
+
+  const statusSpan = document.createElement('span');
+  statusSpan.style.fontSize = '12px';
+  statusSpan.style.color = '#776a5a';
+  statusSpan.textContent = (finishedWeight != null)
+    ? ('Partia zakończona: ' + Number(finishedWeight).toFixed(3) + ' kg')
+    : 'Partia jeszcze nie zakończona.';
+  panel.appendChild(statusSpan);
+
+  if (canEditBatches) {
+    const finishBtn = document.createElement('button');
+    finishBtn.type = 'button';
+    finishBtn.textContent = (finishedWeight != null) ? 'Koniec palenia partii (zmień wagę)' : 'Koniec palenia partii';
+    finishBtn.style.fontSize = '12px';
+    finishBtn.style.padding = '4px 10px';
+    panel.appendChild(finishBtn);
+
+    const finishForm = document.createElement('div');
+    finishForm.style.display = 'none';
+    finishForm.style.gap = '6px';
+    finishForm.style.alignItems = 'center';
+    finishForm.style.flexWrap = 'wrap';
+    const weightInput = document.createElement('input');
+    weightInput.type = 'number';
+    weightInput.step = '0.001';
+    weightInput.placeholder = 'Waga po wypaleniu (kg)';
+    weightInput.style.width = '160px';
+    weightInput.style.padding = '4px 8px';
+    if (finishedWeight != null) weightInput.value = finishedWeight;
+    const saveWeightBtn = document.createElement('button');
+    saveWeightBtn.type = 'button';
+    saveWeightBtn.textContent = 'Zapisz';
+    saveWeightBtn.style.fontSize = '12px';
+    saveWeightBtn.style.padding = '4px 10px';
+    finishForm.appendChild(weightInput);
+    finishForm.appendChild(saveWeightBtn);
+    panel.appendChild(finishForm);
+
+    finishBtn.addEventListener('click', () => {
+      finishForm.style.display = finishForm.style.display === 'none' ? 'flex' : 'none';
+    });
+    saveWeightBtn.addEventListener('click', async () => {
+      const body = new URLSearchParams({ batch_date: batchDate, finished_weight_kg: weightInput.value || '' });
+      saveWeightBtn.disabled = true;
+      saveWeightBtn.textContent = 'Zapisywanie...';
+      try {
+        await fetch('/api/batch/' + encodeURIComponent(beanName) + '/finish', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: body.toString(),
+        });
+        location.reload();
+      } catch (e) {
+        saveWeightBtn.disabled = false;
+        saveWeightBtn.textContent = 'Zapisz';
+        alert('Nie udało się zapisać: ' + (e.message || e));
+      }
+    });
+  }
+
+  const typeLabel = document.createElement('label');
+  typeLabel.style.fontSize = '12px';
+  typeLabel.style.display = 'flex';
+  typeLabel.style.alignItems = 'center';
+  typeLabel.style.gap = '4px';
+  const typeCheckbox = document.createElement('input');
+  typeCheckbox.type = 'checkbox';
+  typeCheckbox.checked = savedCoffeeType === 'espresso';
+  typeLabel.appendChild(typeCheckbox);
+  typeLabel.appendChild(document.createTextNode('Espresso (odznaczone = przelew)'));
+
+  const printBtn = document.createElement('button');
+  printBtn.type = 'button';
+  printBtn.textContent = '🖨️ Wydrukuj etykietę';
+  printBtn.style.fontSize = '12px';
+  printBtn.style.padding = '4px 10px';
+  printBtn.style.background = '#2f6b8f';
+  printBtn.addEventListener('click', () => {
+    const coffeeType = typeCheckbox.checked ? 'espresso' : 'przelew';
+    const url = '/api/batch/' + encodeURIComponent(beanName) + '/label.pdf?date=' +
+      encodeURIComponent(batchDate) + '&coffee_type=' + coffeeType;
+    window.open(url, '_blank');
+  });
+
+  if (canEditBatches) {
+    panel.appendChild(typeLabel);
+    panel.appendChild(printBtn);
+  }
+
+  wrap.appendChild(panel);
 }
 
 const container = document.getElementById('todayCharts');

@@ -135,6 +135,18 @@ CREATE TABLE IF NOT EXISTS water_samples (
     created_by TEXT,                    -- username of whoever logged it
     created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS batch_labels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bean_code TEXT NOT NULL,
+    batch_date TEXT NOT NULL,            -- Europe/Warsaw date (YYYY-MM-DD) of the roasting day
+    finished_weight_kg REAL,             -- total roasted-coffee weight for this day's batch of this bean, set by "koniec palenia partii"
+    coffee_type TEXT,                    -- 'przelew' / 'espresso' — last choice used when printing
+    finished_by TEXT,                    -- username who clicked "koniec palenia partii"
+    finished_at TEXT,                    -- Europe/Warsaw timestamp of that click
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(bean_code, batch_date)
+);
 """
 
 

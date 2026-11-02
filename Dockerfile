@@ -21,6 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 COPY common/ ./common/
 COPY scripts/ ./scripts/
 COPY webapp/ ./webapp/
+COPY assets/ ./assets/
 COPY docker/entrypoint.sh ./docker/entrypoint.sh
 RUN chmod +x ./docker/entrypoint.sh
 
