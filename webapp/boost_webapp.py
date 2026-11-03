@@ -695,7 +695,10 @@ def batch_label_pdf(bean_code):
         abort(400)
 
     inv_conn = get_inv_conn()
-    bean_row = inv_conn.execute("SELECT full_name FROM beans WHERE code=?", (bean_code,)).fetchone()
+    bean_row = inv_conn.execute(
+        "SELECT full_name, country, region, processing, variety FROM beans WHERE code=?",
+        (bean_code,),
+    ).fetchone()
     label_row = inv_conn.execute(
         "SELECT finished_weight_kg FROM batch_labels WHERE bean_code=? AND batch_date=?",
         (bean_code, batch_date),
@@ -711,7 +714,13 @@ def batch_label_pdf(bean_code):
 
     display_name = (bean_row["full_name"] if bean_row and bean_row["full_name"] else bean_code)
     weight_kg = label_row["finished_weight_kg"] if label_row else None
-    pdf_bytes = build_label_pdf(display_name, batch_date, weight_kg, coffee_type)
+    pdf_bytes = build_label_pdf(
+        display_name, batch_date, weight_kg, coffee_type,
+        country=(bean_row["country"] if bean_row else None),
+        region=(bean_row["region"] if bean_row else None),
+        processing=(bean_row["processing"] if bean_row else None),
+        variety=(bean_row["variety"] if bean_row else None),
+    )
 
     filename = f"etykieta_{bean_code}_{batch_date}.pdf"
     return Response(
