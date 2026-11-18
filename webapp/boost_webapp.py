@@ -650,7 +650,7 @@ def roast_reassign_bean(prfl_m_cd):
     return redirect(url_for("roast_detail", prfl_m_cd=prfl_m_cd))
 
 
-@app.route("/api/batch/<bean_code>/finish", methods=["POST"])
+@app.route("/api/batch/<path:bean_code>/finish", methods=["POST"])
 @role_required("admin", "roaster")
 def batch_finish(bean_code):
     """'Koniec palenia partii' — records the total finished (roasted) weight
@@ -682,7 +682,7 @@ def batch_finish(bean_code):
     return redirect(url_for("index"))
 
 
-@app.route("/api/batch/<bean_code>/label.pdf")
+@app.route("/api/batch/<path:bean_code>/label.pdf")
 @role_required("admin", "roaster")
 def batch_label_pdf(bean_code):
     """Generates the 100x150mm batch label PDF (bean, roast date, finished
@@ -898,7 +898,7 @@ def inventory_list():
     )
 
 
-@app.route("/inventory/<code>/tags/add", methods=["POST"])
+@app.route("/inventory/<path:code>/tags/add", methods=["POST"])
 @role_required("admin", "roaster")
 def inventory_add_tag(code):
     conn = get_inv_conn()
@@ -915,7 +915,7 @@ def inventory_add_tag(code):
     return redirect(url_for("inventory_detail", code=code))
 
 
-@app.route("/inventory/<code>/tags/<tag>/delete", methods=["POST"])
+@app.route("/inventory/<path:code>/tags/<tag>/delete", methods=["POST"])
 @role_required("admin", "roaster")
 def inventory_delete_tag(code, tag):
     conn = get_inv_conn()
@@ -926,7 +926,7 @@ def inventory_delete_tag(code, tag):
     return redirect(url_for("inventory_detail", code=code))
 
 
-@app.route("/inventory/<code>/set-status", methods=["POST"])
+@app.route("/inventory/<path:code>/set-status", methods=["POST"])
 @role_required("admin", "roaster")
 def inventory_set_status(code):
     new_status = request.form.get("status", "").strip()
@@ -945,7 +945,7 @@ def inventory_set_status(code):
     return redirect(next_url)
 
 
-@app.route("/inventory/<code>/edit", methods=["POST"])
+@app.route("/inventory/<path:code>/edit", methods=["POST"])
 @role_required("admin", "roaster")
 def inventory_edit(code):
     conn = get_inv_conn()
@@ -964,7 +964,7 @@ def inventory_edit(code):
     return redirect(url_for("inventory_detail", code=code))
 
 
-@app.route("/inventory/<code>/moisture", methods=["POST"])
+@app.route("/inventory/<path:code>/moisture", methods=["POST"])
 @role_required("admin", "roaster")
 def inventory_add_moisture(code):
     conn = get_inv_conn()
@@ -1000,7 +1000,7 @@ def inventory_add_moisture(code):
     return redirect(url_for("inventory_detail", code=code))
 
 
-@app.route("/inventory/<code>/moisture/<int:reading_id>/delete", methods=["POST"])
+@app.route("/inventory/<path:code>/moisture/<int:reading_id>/delete", methods=["POST"])
 @role_required("admin", "roaster")
 def inventory_delete_moisture(code, reading_id):
     conn = get_inv_conn()
@@ -1011,7 +1011,7 @@ def inventory_delete_moisture(code, reading_id):
     return redirect(url_for("inventory_detail", code=code))
 
 
-@app.route("/inventory/<code>")
+@app.route("/inventory/<path:code>")
 def inventory_detail(code):
     conn = get_inv_conn()
     cur = conn.cursor()
@@ -1150,7 +1150,7 @@ def _cupping_form_vocab():
     )
 
 
-@app.route("/api/roasts-for-bean/<code>")
+@app.route("/api/roasts-for-bean/<path:code>")
 @login_required
 def api_roasts_for_bean(code):
     conn = get_conn()
